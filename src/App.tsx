@@ -10,7 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 
-// ---------- Palette ----------
+/* =================== Palette =================== */
 const palette = {
   bg: "#E8E4E2",
   ink: "#161616",
@@ -20,7 +20,7 @@ const palette = {
   dark: "#161616",
 };
 
-// ---------- Small Portal wrapper for truly fixed UI ----------
+/* =================== Portal for true fixed UI =================== */
 const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -28,7 +28,7 @@ const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return createPortal(children, document.body);
 };
 
-// ---------- Navigation ----------
+/* =================== Navigation =================== */
 type InternalItem = {
   type: "section";
   text: string;
@@ -40,7 +40,6 @@ type NavItem = InternalItem | ExternalItem;
 const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [dims, setDims] = useState({ w: 420, h: 380 });
-  const btnRef = useRef<HTMLButtonElement | null>(null);
 
   const navItems: NavItem[] = [
     { type: "section", text: "Home", sectionId: "home" },
@@ -75,8 +74,8 @@ const Navigation = () => {
     close();
 
     setTimeout(() => {
-      const sectionOrder: InternalItem["sectionId"][] = ["home", "services", "about", "contact"];
-      const idx = sectionOrder.indexOf(id);
+      const order: InternalItem["sectionId"][] = ["home", "services", "about", "contact"];
+      const idx = order.indexOf(id);
       if (idx < 0) return;
 
       const root = document.getElementById("stackRoot");
@@ -87,24 +86,20 @@ const Navigation = () => {
 
       const rootTop = (window.scrollY || window.pageYOffset) + root.getBoundingClientRect().top;
       const vh = window.visualViewport?.height ?? window.innerHeight;
-
       let target = Math.round(rootTop + idx * vh) + 2;
+
       const max = Math.max(0, document.documentElement.scrollHeight - vh);
       target = Math.min(Math.max(target, 0), max);
 
       window.scrollTo({ top: target, behavior: "smooth" });
-
-      try {
-        history.replaceState(null, "", `#${id}`);
-      } catch {}
-    }, 80);
+      try { history.replaceState(null, "", `#${id}`); } catch {}
+    }, 60);
   };
 
   return (
     <>
       <div className="fixed top-6 left-6 z-40">
         <button
-          ref={btnRef}
           onPointerUp={toggle}
           aria-expanded={isMenuOpen}
           aria-controls="nav-panel"
@@ -146,10 +141,7 @@ const Navigation = () => {
               className="relative shadow-xl rounded-3xl overflow-hidden h-full w-full"
               style={{ background: palette.blue, color: "#fff" }}
             >
-              <div
-                className="px-5 py-4"
-                style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
-              >
+              <div className="px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
                 <div className="flex justify-between items-center">
                   <span className="uppercase text-[11px] tracking-[0.4em] leading-none">close</span>
                   <button
@@ -217,7 +209,7 @@ const Navigation = () => {
   );
 };
 
-// ---------- Scene Stack (smooth sticky crossfade, stabilized) ----------
+/* =================== Scene Stack (iOS-proof) =================== */
 const useIsMobile = () => {
   const [m, setM] = React.useState(false);
   React.useEffect(() => {
@@ -233,12 +225,18 @@ const useIsMobile = () => {
 const useRespectReducedMotion = () => {
   const sysPrefers = useReducedMotion();
   const [force, setForce] = React.useState(false);
-
   React.useEffect(() => {
     setForce(typeof window !== "undefined" && localStorage.getItem("forceAnimations") === "1");
   }, []);
-
   return sysPrefers && !force;
+};
+
+const isIOS = () => {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const isiDevice = /iPad|iPhone|iPod/.test(ua);
+  const isTouchMac = /Macintosh/.test(ua) && (navigator as any).maxTouchPoints > 1;
+  return isiDevice || isTouchMac;
 };
 
 export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
@@ -248,6 +246,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
   const prefersReduced = useRespectReducedMotion();
   const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const onIOS = useMemo(() => isIOS(), []);
 
   if (prefersReduced) {
     return (
@@ -261,26 +260,58 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
     );
   }
 
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ["start start", "end end"],
-  });
+  // ----- Progress source:
+  // iOS → нормализуем от window.scrollY
+  // остальные → обычный target scroll
+  const global = useScroll(); // { scrollY, scrollYProgress }
+  const target = useScroll({ target: containerRef, offset: ["start start", "end end"] });
 
-  const smooth = useSpring(scrollYProgress, {
-    stiffness: 160,
-    damping: 42,
-    mass: 0.6,
-  });
+  const boundsRef = useRef({ start: 0, end: 1, vh: 0 });
+  useEffect(() => {
+    const recalc = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const sc = window.scrollY || window.pageYOffset;
+      const start = Math.round(sc + r.top);
+      const end = Math.round(sc + r.bottom);
+      const vh = window.visualViewport?.height ?? window.innerHeight;
+      boundsRef.current = { start, end: Math.max(start + 1, end - vh), vh };
+    };
+    recalc();
+    const ro = new ResizeObserver(recalc);
+    if (containerRef.current) ro.observe(containerRef.current);
+    window.addEventListener("resize", recalc);
+    window.addEventListener("orientationchange", recalc);
+    const t = setTimeout(recalc, 50);
+    return () => {
+      clearTimeout(t);
+      ro.disconnect();
+      window.removeEventListener("resize", recalc);
+      window.removeEventListener("orientationchange", recalc);
+    };
+  }, []);
+
+  const rawProgress = onIOS
+    ? useTransform(global.scrollY, (y) => {
+        const { start, end } = boundsRef.current;
+        const p = (y - start) / (end - start);
+        return Math.min(1, Math.max(0, p));
+      })
+    : target.scrollYProgress;
+
+  const smooth = useSpring(rawProgress, { stiffness: 160, damping: 42, mass: 0.6 });
 
   const count = children.length;
-  const totalH = (count - 1) * 100 + 100;
+  // Чуть больше 100%, +1px, чтобы не было шва/полосы.
+  const totalH = (count - 1) * 100 + 100 + 0.2;
 
   return (
     <div
       id="stackRoot"
       ref={containerRef}
       className="relative"
-      style={{ height: `calc(${totalH} * 1svh + 1px)`, background: palette.bg }}
+      style={{ height: `calc(${totalH} * 1svh + 1px)` }}
     >
       {children.map((child, i) => {
         const start = i / count;
@@ -315,7 +346,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
             <section
               key={ids[i]}
               id={ids[i]}
-              className="relative min-h-[calc(100svh+1px)] flex items-stretch"
+              className="relative min-h-[calc(100svh+2px)] flex items-stretch"
               style={{ zIndex: z }}
             >
               <motion.div
@@ -356,11 +387,13 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           </section>
         );
       })}
+      {/* маленький спейсер, чтобы не ловить крайний «зазор» */}
+      <div style={{ height: 2 }} />
     </div>
   );
 };
 
-// ---------- Reusable tiles ----------
+/* =================== Tiles =================== */
 const Tile = ({ children, className = "", onClick }: any) => (
   <motion.div
     whileHover={{ y: -3 }}
@@ -372,7 +405,7 @@ const Tile = ({ children, className = "", onClick }: any) => (
   </motion.div>
 );
 
-// ====== ReadyTile ======
+/* =================== Ready Tile =================== */
 const ReadyTile = () => (
   <Tile className="h-full p-6 md:p-8 flex flex-col justify-between min-h-0">
     <div className="space-y-2">
@@ -411,10 +444,9 @@ const gradient = (i: number) =>
     30 + ((i + 2) % 5) * 12
   }%, rgba(10,60,194,0.2), transparent 60%), linear-gradient(135deg, #ffffff, #f6f7fb)`;
 
-// ---------- Footer ----------
+/* =================== Footer =================== */
 const CTAButton: React.FC = () => {
   const [active, setActive] = React.useState(false);
-
   return (
     <motion.a
       href="#contact"
@@ -471,7 +503,6 @@ const CTAButton: React.FC = () => {
 
 export const FooterQuad = () => {
   const services = ["Complete Website", "UI/UX Design", "iOS Development", "Web Development"];
-
   const reveal = (delay = 0) => ({
     initial: { opacity: 0, y: 24 },
     whileInView: { opacity: 1, y: 0 },
@@ -492,16 +523,14 @@ export const FooterQuad = () => {
             className="flex space-x-8"
             style={{ animation: "scroll-horizontal 80s linear infinite", width: "calc(400% + 128px)" }}
           >
-            {Array(4)
-              .fill("DESIGN BUREAU")
-              .map((text, i) => (
-                <span
-                  key={i}
-                  className="font-black whitespace-nowrap text-[clamp(3.5rem,18vw,6rem)] sm:text-[clamp(6rem,16vw,18rem)]"
-                >
-                  {text}
-                </span>
-              ))}
+            {Array(4).fill("DESIGN BUREAU").map((text, i) => (
+              <span
+                key={i}
+                className="font-black whitespace-nowrap text-[clamp(3.5rem,18vw,6rem)] sm:text-[clamp(6rem,16vw,18rem)]"
+              >
+                {text}
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -581,7 +610,7 @@ export const FooterQuad = () => {
   );
 };
 
-// ---------- AwardsButton ----------
+/* =================== Awards Button =================== */
 const useIsTouch = () => {
   const [isTouch, setIsTouch] = useState(false);
   useEffect(() => {
@@ -726,8 +755,26 @@ const AwardsButton: React.FC = () => {
   );
 };
 
+/* =================== Global iOS bg/rubber-band fix =================== */
+const GlobalBgFix = () => (
+  <style>{`
+    html, body, #root { height: 100%; background: ${palette.bg}; }
+    body { overscroll-behavior-y: none; }
+    /* фикс: подкладываем постоянный фон за документом,
+       чтобы при rubber-band Safari не проглядывала белая/жёлтая подложка */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: ${palette.bg};
+      z-index: -1;
+      pointer-events: none;
+    }
+    * { -webkit-tap-highlight-color: transparent; }
+  `}</style>
+);
 
-// ---------- App ----------
+/* =================== App =================== */
 export default function App() {
   useEffect(() => {
     document.documentElement.style.scrollBehavior = "smooth";
@@ -743,10 +790,7 @@ export default function App() {
         animate="show"
         variants={{
           hidden: { opacity: 1 },
-          show: {
-            opacity: 1,
-            transition: { staggerChildren: 0.08, delayChildren: 0.08 },
-          },
+          show: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.08 } },
         }}
         className="grid grid-cols-12 md:grid-rows-2 gap-3 md:gap-5 max-w-[1600px] mx-auto md:h-[78vh]"
       >
@@ -859,10 +903,7 @@ export default function App() {
       <div className="relative max-w-[1600px] mx-auto w-full">
         <div className="grid grid-cols-2 grid-rows-2 min-h-[70svh] md:min-h-[80svh]">
           {[
-            {
-              title: "COMPLETE\nWEBSITE",
-              sub: "MOODBOARD / WIREFRAMING / CONCEPTS IN ANIMATION / DESIGN / DEVELOPMENT",
-            },
+            { title: "COMPLETE\nWEBSITE", sub: "MOODBOARD / WIREFRAMING / CONCEPTS IN ANIMATION / DESIGN / DEVELOPMENT" },
             { title: "UI\nDESIGN", sub: "MOODBOARD / DESIGN CONCEPTS / ANIMATION / WEBDESIGN" },
             { title: "UX\nDESIGN", sub: "WIREFRAMING / UX RESEARCH / WEBSITE AUDIT", accent: true },
             { title: "WEB\nDEVELOPMENT", sub: "DEVELOPMENT / WEBFLOW / E-COMMERCE" },
@@ -910,13 +951,11 @@ export default function App() {
             className="flex space-x-16"
             style={{ animation: "scroll-horizontal 100s linear infinite", width: "calc(300% + 128px)" }}
           >
-            {Array(3)
-              .fill("CREATIVE DIGITAL EXPERIENCES")
-              .map((text, index) => (
-                <span key={index} className="text-[clamp(4rem,15vw,15rem)] font-black whitespace-nowrap">
-                  {text}
-                </span>
-              ))}
+            {Array(3).fill("CREATIVE DIGITAL EXPERIENCES").map((text, index) => (
+              <span key={index} className="text-[clamp(4rem,15vw,15rem)] font-black whitespace-nowrap">
+                {text}
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -1028,17 +1067,19 @@ export default function App() {
 
   return (
     <div style={{ background: palette.bg, color: palette.ink }} className="relative min-h-[100svh]">
-      {/* Render fixed UI via portal to avoid iOS fixed-position glitches */}
+      {/* фикс фона и rubber-band */}
+      <GlobalBgFix />
+
+      {/* фиксированные элементы через портал */}
       <Portal><Navigation /></Portal>
 
       <SceneStack ids={["home", "services", "about", "contact"]}>
         {[Hero, Services, WhatWeDo, <FooterQuad key="f" />] as any}
       </SceneStack>
 
-      {/* Fixed “PROCESS” button */}
       <Portal><AwardsButton /></Portal>
 
-      {/* iOS/safari helpers */}
+      {/* дублирующий safety-стиль (если что-то перепишут сверху) */}
       <style>{`
         html, body, #root { background: ${palette.bg}; height: 100%; }
         body { overscroll-behavior-y: none; }

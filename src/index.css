@@ -9,6 +9,18 @@ html, body {
   overflow-x: clip; 
   background: #1E1E1E;
 }
+/* globals.css */
+html, body, #root { height: 100%; background: #1E1E1E; }
+body { overscroll-behavior-y: none; }
+body::before {
+  content: "";
+  position: fixed;
+background: #1E1E1E;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+* { -webkit-tap-highlight-color: transparent; }
 html, body, #root {
   background: #1E1E1E;
   min-height: 100%;
