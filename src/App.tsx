@@ -249,15 +249,6 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
   const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // iOS детект
-  const isiOS = useMemo(() => {
-    if (typeof navigator === "undefined") return false;
-    const ua = navigator.userAgent || "";
-    const isiDevice = /iPad|iPhone|iPod/.test(ua);
-    const isTouchMac = /Macintosh/.test(ua) && (navigator as any).maxTouchPoints > 1;
-    return isiDevice || isTouchMac;
-  }, []);
-
   if (prefersReduced) {
     return (
       <div ref={containerRef}>
@@ -270,63 +261,26 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
     );
   }
 
-  // ---- Считаем прогресс по глобальному скроллу для iOS, target-скролл для остальных
-  const { scrollY } = useScroll(); // глобальный // глобальный
-  const targetScroll = useScroll({ target: containerRef, offset: ["start start", "end end"] });
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start start", "end end"],
+  });
 
-  const vh = () => (window.visualViewport?.height ?? window.innerHeight);
-
-  const boundsRef = useRef({ top: 0, bottom: 0, vh: 0 });
-  useEffect(() => {
-    const recalc = () => {
-      const el = containerRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      const sc = window.scrollY || window.pageYOffset;
-      boundsRef.current = {
-        top: Math.round(sc + r.top),
-        bottom: Math.round(sc + r.bottom),
-        vh: vh(),
-      };
-    };
-    recalc();
-    window.addEventListener("resize", recalc);
-    window.addEventListener("orientationchange", recalc);
-    const ro = new ResizeObserver(recalc);
-    if (containerRef.current) ro.observe(containerRef.current);
-    // маленькая задержка для мобильного Safari после layout-скачков
-    const t = setTimeout(recalc, 50);
-    return () => {
-      clearTimeout(t);
-      ro.disconnect();
-      window.removeEventListener("resize", recalc);
-      window.removeEventListener("orientationchange", recalc);
-    };
-  }, []);
-
-  // Нормализованный локальный прогресс [0..1]
-  const smooth = useSpring(
-    isiOS
-      ? useTransform(scrollY, (y) => {
-          const { top, bottom, vh } = boundsRef.current;
-          const start = top;
-          const end = Math.max(start + 1, bottom - vh); // защита от деления на ноль
-          const raw = (y - start) / (end - start);
-          return Math.min(1, Math.max(0, raw));
-        })
-      : targetScroll.scrollYProgress, // обычный путь для не-iOS
-    { stiffness: 160, damping: 42, mass: 0.6 }
-  );
+  const smooth = useSpring(scrollYProgress, {
+    stiffness: 160,
+    damping: 42,
+    mass: 0.6,
+  });
 
   const count = children.length;
-  const totalH = (count - 1) * 100 + 100 + 0.2; // слегка > 100%, чтобы не было шва
+  const totalH = (count - 1) * 100 + 100;
 
   return (
     <div
       id="stackRoot"
       ref={containerRef}
       className="relative"
-      style={{ height: `calc(${totalH} * 1svh)` }}
+      style={{ height: `calc(${totalH} * 1svh + 1px)`, background: palette.bg }}
     >
       {children.map((child, i) => {
         const start = i / count;
@@ -361,7 +315,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
             <section
               key={ids[i]}
               id={ids[i]}
-              className="relative min-h-[calc(100svh+2px)] flex items-stretch"
+              className="relative min-h-[calc(100svh+1px)] flex items-stretch"
               style={{ zIndex: z }}
             >
               <motion.div
@@ -402,8 +356,6 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           </section>
         );
       })}
-      {/* маленький спейсер от шва в самом низу */}
-      <div style={{ height: 2 }} />
     </div>
   );
 };
@@ -773,24 +725,7 @@ const AwardsButton: React.FC = () => {
     </div>
   );
 };
-// Глобальный фикс фона для iOS rubber-band
-const GlobalBgFix = () => (
-  <style>{`
-    html, body, #root { height: 100%; background: ${palette.bg}; }
-    /* Фикс: подкладываем фиксированный слой фона, чтобы при резиновой прокрутке
-       не было "системного" бело-жёлтого фона Safari за пределами документа */
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      background: ${palette.bg};
-      z-index: -1;
-      pointer-events: none;
-    }
-    * { -webkit-tap-highlight-color: transparent; }
-    body { overscroll-behavior-y: none; }
-  `}</style>
-);
+
 
 // ---------- App ----------
 export default function App() {
@@ -1094,14 +1029,14 @@ export default function App() {
   return (
     <div style={{ background: palette.bg, color: palette.ink }} className="relative min-h-[100svh]">
       {/* Render fixed UI via portal to avoid iOS fixed-position glitches */}
-      <Portal><Navigation /></Portal><GlobalBgFix />
+      <Portal><Navigation /></Portal>
 
       <SceneStack ids={["home", "services", "about", "contact"]}>
         {[Hero, Services, WhatWeDo, <FooterQuad key="f" />] as any}
       </SceneStack>
 
       {/* Fixed “PROCESS” button */}
-      <Portal><AwardsButton /></Portal><GlobalBgFix />
+      <Portal><AwardsButton /></Portal>
 
       {/* iOS/safari helpers */}
       <style>{`
