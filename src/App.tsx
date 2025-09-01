@@ -7,8 +7,8 @@ import {
   useSpring,
   useReducedMotion,
 } from "framer-motion";
+import { createPortal } from "react-dom";
 import { ArrowUpRight, Menu, X } from "lucide-react";
-
 
 // ---------- Palette ----------
 const palette = {
@@ -18,6 +18,14 @@ const palette = {
   card: "#FFFFFF",
   blue: "#0A3CC2",
   dark: "#161616",
+};
+
+// ---------- Small Portal wrapper for truly fixed UI ----------
+const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return createPortal(children, document.body);
 };
 
 // ---------- Navigation ----------
@@ -63,40 +71,34 @@ const Navigation = () => {
     return () => window.removeEventListener("resize", calc);
   }, []);
 
- const scrollToSection = (id: InternalItem["sectionId"]) => {
-  close();
+  const scrollToSection = (id: InternalItem["sectionId"]) => {
+    close();
 
-  
-  setTimeout(() => {
-    const sectionOrder: InternalItem["sectionId"][] = ["home", "services", "about", "contact"];
-    const idx = sectionOrder.indexOf(id);
-    if (idx < 0) return;
+    setTimeout(() => {
+      const sectionOrder: InternalItem["sectionId"][] = ["home", "services", "about", "contact"];
+      const idx = sectionOrder.indexOf(id);
+      if (idx < 0) return;
 
-    const root = document.getElementById("stackRoot");
-    if (!root) {
-    
-      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
+      const root = document.getElementById("stackRoot");
+      if (!root) {
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
 
-  
-    const rootTop = (window.scrollY || window.pageYOffset) + root.getBoundingClientRect().top;
+      const rootTop = (window.scrollY || window.pageYOffset) + root.getBoundingClientRect().top;
+      const vh = window.visualViewport?.height ?? window.innerHeight;
 
-   
-    const vh = (window.visualViewport?.height ?? window.innerHeight);
+      let target = Math.round(rootTop + idx * vh) + 2;
+      const max = Math.max(0, document.documentElement.scrollHeight - vh);
+      target = Math.min(Math.max(target, 0), max);
 
-  
-    let target = Math.round(rootTop + idx * vh) + 2;
+      window.scrollTo({ top: target, behavior: "smooth" });
 
-   
-    const max = Math.max(0, document.documentElement.scrollHeight - vh);
-    target = Math.min(Math.max(target, 0), max);
-
-    window.scrollTo({ top: target, behavior: "smooth" });
-
-    try { history.replaceState(null, "", `#${id}`); } catch {}
-  }, 80);
-};
+      try {
+        history.replaceState(null, "", `#${id}`);
+      } catch {}
+    }, 80);
+  };
 
   return (
     <>
@@ -113,9 +115,7 @@ const Navigation = () => {
           }`}
           style={{ WebkitTapHighlightColor: "transparent" }}
         >
-          <span className="uppercase text-[11px] tracking-[0.4em] leading-none">
-            menu
-          </span>
+          <span className="uppercase text-[11px] tracking-[0.4em] leading-none">menu</span>
           <span className="inline-flex">
             <Menu size={20} strokeWidth={2} />
           </span>
@@ -151,9 +151,7 @@ const Navigation = () => {
                 style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
               >
                 <div className="flex justify-between items-center">
-                  <span className="uppercase text-[11px] tracking-[0.4em] leading-none">
-                    close
-                  </span>
+                  <span className="uppercase text-[11px] tracking-[0.4em] leading-none">close</span>
                   <button
                     type="button"
                     onPointerUp={close}
@@ -195,9 +193,7 @@ const Navigation = () => {
                       ) : (
                         <button
                           type="button"
-                          onPointerUp={() =>
-                            scrollToSection((item as InternalItem).sectionId)
-                          }
+                          onPointerUp={() => scrollToSection((item as InternalItem).sectionId)}
                           className="w-full text-left flex items-center justify-between py-4 group"
                           style={{ WebkitTapHighlightColor: "transparent" }}
                         >
@@ -221,9 +217,7 @@ const Navigation = () => {
   );
 };
 
-
 // ---------- Scene Stack (smooth sticky crossfade, stabilized) ----------
-
 const useIsMobile = () => {
   const [m, setM] = React.useState(false);
   React.useEffect(() => {
@@ -235,6 +229,7 @@ const useIsMobile = () => {
   }, []);
   return m;
 };
+
 const useRespectReducedMotion = () => {
   const sysPrefers = useReducedMotion();
   const [force, setForce] = React.useState(false);
@@ -250,12 +245,11 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
   ids,
   children,
 }) => {
-  const prefersReduced = useRespectReducedMotion();  
+  const prefersReduced = useRespectReducedMotion();
   const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   if (prefersReduced) {
-    // упрощённый режим без анимаций
     return (
       <div ref={containerRef}>
         {children.map((child, i) => (
@@ -286,7 +280,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
       id="stackRoot"
       ref={containerRef}
       className="relative"
-      style={{ height: `calc(${totalH} * 1svh + 1px)` }}
+      style={{ height: `calc(${totalH} * 1svh + 1px)`, background: palette.bg }}
     >
       {children.map((child, i) => {
         const start = i / count;
@@ -317,7 +311,6 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
         const z = count - i;
 
         if (isLast) {
-          // последний экран: relative, без sticky
           return (
             <section
               key={ids[i]}
@@ -326,7 +319,13 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
               style={{ zIndex: z }}
             >
               <motion.div
-                style={{ opacity, y, willChange: "transform, opacity" }}
+                style={{
+                  opacity,
+                  y,
+                  willChange: "transform, opacity",
+                  transform: "translateZ(0)",
+                  WebkitBackfaceVisibility: "hidden",
+                }}
                 className="w-full"
               >
                 {child}
@@ -335,7 +334,6 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           );
         }
 
-        // все остальные: sticky + motion.div внутри
         return (
           <section
             key={ids[i]}
@@ -344,7 +342,13 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
             style={{ zIndex: z }}
           >
             <motion.div
-              style={{ opacity, y, willChange: "transform, opacity" }}
+              style={{
+                opacity,
+                y,
+                willChange: "transform, opacity",
+                transform: "translateZ(0)",
+                WebkitBackfaceVisibility: "hidden",
+              }}
               className="w-full h-full flex items-center"
             >
               <div className="w-full">{child}</div>
@@ -355,6 +359,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
     </div>
   );
 };
+
 // ---------- Reusable tiles ----------
 const Tile = ({ children, className = "", onClick }: any) => (
   <motion.div
@@ -421,15 +426,12 @@ const CTAButton: React.FC = () => {
       initial={false}
       animate={active ? "hover" : "rest"}
       whileTap={{ scale: 0.98 }}
-      // desktop
       onMouseEnter={() => setActive(true)}
       onMouseLeave={() => setActive(false)}
-      // iOS / touch
       onPointerDown={() => setActive(true)}
       onPointerUp={() => setActive(false)}
       onPointerCancel={() => setActive(false)}
       onPointerLeave={() => setActive(false)}
-      // a11y
       onFocus={() => setActive(true)}
       onBlur={() => setActive(false)}
       role="button"
@@ -466,6 +468,7 @@ const CTAButton: React.FC = () => {
     </motion.a>
   );
 };
+
 export const FooterQuad = () => {
   const services = ["Complete Website", "UI/UX Design", "iOS Development", "Web Development"];
 
@@ -479,28 +482,26 @@ export const FooterQuad = () => {
   return (
     <section
       id="contact"
-       className="relative min-h-[100svh] flex items-stretch overflow-hidden"
+      className="relative min-h-[100svh] flex items-stretch overflow-hidden"
       style={{ background: "#1E1E1E", color: "#FFF" }}
     >
-      {/* Background marquee (offset on mobile, same opacity) */}
+      {/* Background marquee */}
       <div className="absolute inset-0 pointer-events-none select-none overflow-hidden opacity-5">
         <div className="absolute left-0 w-full h-full top-[8vh] sm:top-0">
           <div
             className="flex space-x-8"
             style={{ animation: "scroll-horizontal 80s linear infinite", width: "calc(400% + 128px)" }}
           >
-            {Array(4).fill("DESIGN BUREAU").map((text, i) => (
-              <span
-                key={i}
-                className="
-                  font-black whitespace-nowrap
-                  text-[clamp(3.5rem,18vw,6rem)]
-                  sm:text-[clamp(6rem,16vw,18rem)]
-                "
-              >
-                {text}
-              </span>
-            ))}
+            {Array(4)
+              .fill("DESIGN BUREAU")
+              .map((text, i) => (
+                <span
+                  key={i}
+                  className="font-black whitespace-nowrap text-[clamp(3.5rem,18vw,6rem)] sm:text-[clamp(6rem,16vw,18rem)]"
+                >
+                  {text}
+                </span>
+              ))}
           </div>
         </div>
       </div>
@@ -521,8 +522,8 @@ export const FooterQuad = () => {
           </motion.h2>
 
           <motion.div {...reveal(0.22)} className="inline-block mt-1 sm:mt-0">
-  <CTAButton />
-</motion.div>
+            <CTAButton />
+          </motion.div>
         </div>
 
         {/* Services */}
@@ -580,9 +581,6 @@ export const FooterQuad = () => {
   );
 };
 
-// ---------- Scenes ----------
-
-
 // ---------- AwardsButton ----------
 const useIsTouch = () => {
   const [isTouch, setIsTouch] = useState(false);
@@ -604,7 +602,6 @@ const AwardsButton: React.FC = () => {
   const isTouch = useIsTouch();
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  
   const dots = useMemo(
     () =>
       Array.from({ length: 6 }).map(() => ({
@@ -614,7 +611,6 @@ const AwardsButton: React.FC = () => {
     []
   );
 
- 
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
       if (!rootRef.current) return;
@@ -643,14 +639,12 @@ const AwardsButton: React.FC = () => {
         type="button"
         aria-expanded={open}
         aria-controls="process-list"
-        
         onPointerDown={(e) => {
           if (isTouch) {
-            e.preventDefault(); 
+            e.preventDefault();
             setOpen((v) => !v);
           }
         }}
-       
         onClick={() => {
           if (!isTouch) setOpen((v) => !v);
         }}
@@ -742,123 +736,122 @@ export default function App() {
   }, []);
 
   const Hero = (
-  <div className="px-4 md:px-8 w-full" id="home">
-    <motion.div
-      initial="hidden"
-      animate="show"
-      variants={{
-        hidden: { opacity: 1 },        
-        show: {
-          opacity: 1,
-          transition: { staggerChildren: 0.08, delayChildren: 0.08 },
-        },
-      }}
-      className="grid grid-cols-12 md:grid-rows-2 gap-3 md:gap-5 max-w-[1600px] mx-auto md:h-[78vh]"
-    >
-      {/* Title */}
-      <Tile className="col-span-12 md:col-span-8 md:row-span-1 aspect-[2/1] md:aspect-auto md:h-full p-6 md:p-10 flex items-end">
-        <motion.h1
+    <div className="px-4 md:px-8 w-full" id="home">
+      <motion.div
+        initial="hidden"
+        animate="show"
+        variants={{
+          hidden: { opacity: 1 },
+          show: {
+            opacity: 1,
+            transition: { staggerChildren: 0.08, delayChildren: 0.08 },
+          },
+        }}
+        className="grid grid-cols-12 md:grid-rows-2 gap-3 md:gap-5 max-w-[1600px] mx-auto md:h-[78vh]"
+      >
+        {/* Title */}
+        <Tile className="col-span-12 md:col-span-8 md:row-span-1 aspect-[2/1] md:aspect-auto md:h-full p-6 md:p-10 flex items-end">
+          <motion.h1
+            variants={{
+              hidden: { opacity: 0, y: 14 },
+              show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
+            }}
+            className="text-[10vw] md:text-[5.6vw] leading-[0.95] font-medium tracking-tight"
+          >
+            We create <span style={{ color: palette.blue }}>award</span> winning sites
+          </motion.h1>
+        </Tile>
+
+        {/* Blue tile */}
+        <motion.div
           variants={{
-            hidden: { opacity: 0, y: 14 },
+            hidden: { opacity: 0, y: 18 },
             show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
           }}
-          className="text-[10vw] md:text-[5.6vw] leading-[0.95] font-medium tracking-tight"
+          className="col-span-6 md:col-span-4 md:row-span-2"
         >
-          We create <span style={{ color: palette.blue }}>award</span> winning sites
-        </motion.h1>
-      </Tile>
+          <Tile className="aspect-square md:aspect-auto md:h-full overflow-hidden">
+            <div className="relative w-full h-full rounded-3xl" style={{ background: palette.blue }}>
+              <span className="logoMark-vertical absolute font-medium text-white/95 select-none">
+                DigitalForge®
+              </span>
+              <span className="logoMark-mobile absolute font-medium text-white/95 select-none">
+                <span className="block">Digital</span>
+                <span className="block">Forge®</span>
+              </span>
+            </div>
+          </Tile>
+        </motion.div>
 
-      {/* Blue tile  */}
-      <motion.div
-        variants={{
-          hidden: { opacity: 0, y: 18 },
-          show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
-        }}
-        className="col-span-6 md:col-span-4 md:row-span-2"
-      >
-        <Tile className="aspect-square md:aspect-auto md:h-full overflow-hidden">
-          <div className="relative w-full h-full rounded-3xl" style={{ background: palette.blue }}>
-            <span className="logoMark-vertical absolute font-medium text-white/95 select-none">
-              DigitalForge®
-            </span>
-            <span className="logoMark-mobile absolute font-medium text-white/95 select-none">
-              <span className="block">Digital</span>
-              <span className="block">Forge®</span>
-            </span>
-          </div>
-        </Tile>
+        {/* Ready */}
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 18 },
+            show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
+          }}
+          className="col-span-6 md:col-span-3 md:row-span-1"
+        >
+          <ReadyTile />
+        </motion.div>
+
+        {/* Gradient grid */}
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 18 },
+            show: { opacity: 1, y: 0, transition: { duration: 0.65, ease: "easeOut" } },
+          }}
+          className="col-span-12 md:col-span-5 md:row-span-1"
+        >
+          <Tile className="aspect-[16/10] md:aspect-auto md:h-full overflow-hidden">
+            <motion.div
+              initial={{ x: 24, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.7, ease: [0.19, 1, 0.22, 1], delay: 0.06 }}
+              className="h-full w-full grid grid-cols-8 gap-2 p-2"
+            >
+              {Array.from({ length: 16 }).map((_, idx) => (
+                <div key={idx} className="rounded-lg" style={{ background: gradient(idx) }} />
+              ))}
+            </motion.div>
+          </Tile>
+        </motion.div>
       </motion.div>
 
-      {/* Ready */}
-      <motion.div
-        variants={{
-          hidden: { opacity: 0, y: 18 },
-          show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
-        }}
-        className="col-span-6 md:col-span-3 md:row-span-1"
-      >
-        <ReadyTile />
-      </motion.div>
-
-      {/* Gradient grid */}
-      <motion.div
-        variants={{
-          hidden: { opacity: 0, y: 18 },
-          show: { opacity: 1, y: 0, transition: { duration: 0.65, ease: "easeOut" } },
-        }}
-        className="col-span-12 md:col-span-5 md:row-span-1"
-      >
-        <Tile className="aspect-[16/10] md:aspect-auto md:h-full overflow-hidden">
-          <motion.div
-            initial={{ x: 24, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.7, ease: [0.19, 1, 0.22, 1], delay: 0.06 }}
-            className="h-full w-full grid grid-cols-8 gap-2 p-2"
-          >
-            {Array.from({ length: 16 }).map((_, idx) => (
-              <div key={idx} className="rounded-lg" style={{ background: gradient(idx) }} />
-            ))}
-          </motion.div>
-        </Tile>
-      </motion.div>
-    </motion.div>
-
-    
-    <style>{`
-      .logoMark-vertical {
-        display: block;
-        writing-mode: vertical-rl;
-        text-orientation: mixed;
-        right: 0.75rem;
-        bottom: 0.75rem;
-        font-size: clamp(40px, 8vw, 96px);
-        line-height: 1;
-        letter-spacing: -0.01em;
-        white-space: nowrap;
-      }
-      .logoMark-mobile { display: none; }
-      @media (max-width: 640px) {
-        .logoMark-vertical { display: none; }
-        .logoMark-mobile {
+      <style>{`
+        .logoMark-vertical {
           display: block;
-          left: 0.5rem;
-          bottom: 0.5rem;
-          text-align: left;
-          line-height: 0.9;
+          writing-mode: vertical-rl;
+          text-orientation: mixed;
+          right: 0.75rem;
+          bottom: 0.75rem;
+          font-size: clamp(40px, 8vw, 96px);
+          line-height: 1;
           letter-spacing: -0.01em;
-          font-size: clamp(24px, 11vw, 44px);
+          white-space: nowrap;
         }
-      }
-      @media (max-width: 360px) {
-        .logoMark-mobile {
-          left: 0.4rem;
-          bottom: 0.4rem;
-          font-size: clamp(20px, 12vw, 38px);
+        .logoMark-mobile { display: none; }
+        @media (max-width: 640px) {
+          .logoMark-vertical { display: none; }
+          .logoMark-mobile {
+            display: block;
+            left: 0.5rem;
+            bottom: 0.5rem;
+            text-align: left;
+            line-height: 0.9;
+            letter-spacing: -0.01em;
+            font-size: clamp(24px, 11vw, 44px);
+          }
         }
-      }
-    `}</style>
-  </div>
-);
+        @media (max-width: 360px) {
+          .logoMark-mobile {
+            left: 0.4rem;
+            bottom: 0.4rem;
+            font-size: clamp(20px, 12vw, 38px);
+          }
+        }
+      `}</style>
+    </div>
+  );
 
   const Services = (
     <div className="px-4 md:px-8 w-full" id="services">
@@ -870,11 +863,7 @@ export default function App() {
               sub: "MOODBOARD / WIREFRAMING / CONCEPTS IN ANIMATION / DESIGN / DEVELOPMENT",
             },
             { title: "UI\nDESIGN", sub: "MOODBOARD / DESIGN CONCEPTS / ANIMATION / WEBDESIGN" },
-            {
-              title: "UX\nDESIGN",
-              sub: "WIREFRAMING / UX RESEARCH / WEBSITE AUDIT",
-              accent: true,
-            },
+            { title: "UX\nDESIGN", sub: "WIREFRAMING / UX RESEARCH / WEBSITE AUDIT", accent: true },
             { title: "WEB\nDEVELOPMENT", sub: "DEVELOPMENT / WEBFLOW / E-COMMERCE" },
           ].map((s, i) => (
             <div key={i} className="relative flex items-center justify-center border border-black/10">
@@ -913,145 +902,147 @@ export default function App() {
   );
 
   const WhatWeDo = (
-  <section id="about" className="relative overflow-x-hidden" style={{ color: palette.ink }}>
-   
-    <div className="absolute inset-0 pointer-events-none select-none opacity-5">
-      <div className="absolute top-1/2 left-0 w-full -translate-y-1/2">
-        <div
-          className="flex space-x-16"
-          style={{
-            animation: "scroll-horizontal 100s linear infinite",
-            width: "calc(300% + 128px)",
-          }}
-        >
-          {Array(3)
-            .fill("CREATIVE DIGITAL EXPERIENCES")
-            .map((text, index) => (
-              <span
-                key={index}
-                className="text-[clamp(4rem,15vw,15rem)] font-black whitespace-nowrap"
-              >
-                {text}
-              </span>
-            ))}
-        </div>
-      </div>
-    </div>
-
-    <div className="relative px-4 md:px-8 w-full">
-      <div className="max-w-[1600px] mx-auto">
-        {/* Header */}
-        <div className="text-center pt-16 md:pt-24 mb-16 md:mb-20">
-          <motion.h2
-            initial={{ opacity: 0, y: 28 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-            transition={{ duration: 0.9, ease: "easeOut", delay: 0.1 }}
-            className="text-[clamp(2rem,8vw,8rem)] font-black leading-[0.8] mb-10"
+    <section id="about" className="relative overflow-x-hidden" style={{ color: palette.ink }}>
+      <div className="absolute inset-0 pointer-events-none select-none opacity-5">
+        <div className="absolute top-1/2 left-0 w-full -translate-y-1/2">
+          <div
+            className="flex space-x-16"
+            style={{ animation: "scroll-horizontal 100s linear infinite", width: "calc(300% + 128px)" }}
           >
-            What I do
-          </motion.h2>
-
-          <motion.div
-            initial={{ opacity: 0, y: 28 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-            transition={{ duration: 0.9, ease: "easeOut", delay: 0.25 }}
-            className="w-24 h-px bg-current mx-auto mb-10"
-          />
-
-          <motion.p
-            initial={{ opacity: 0, y: 28 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-            transition={{ duration: 0.9, ease: "easeOut", delay: 0.4 }}
-            className="text-[clamp(1.2rem,3.8vw,2.2rem)] font-medium leading-tight max-w-5xl mx-auto text-neutral-800"
-          >
-            My goal is to transform your idea into a product where design meets effortless experience.
-          </motion.p>
-        </div>
-
-        {/* Cards */}
-        <div className="grid grid-cols-12 gap-4 items-stretch">
-          <div className="col-span-12 lg:col-span-4">
-            <Tile className="p-8 md:p-12 h-full flex flex-col justify-between">
-              <div>
-                <p className="uppercase tracking-[0.2em] text-xs text-neutral-500">What We Do</p>
-                <h3 className="text-4xl md:text-5xl mt-3 font-medium">We make brands move.</h3>
-              </div>
-              <p className="text-neutral-600 mt-6 leading-relaxed max-w-prose">
-                Strategy → Visual identity → Web experiences. We combine design and engineering to ship fast, award-ready sites with measurable impact.
-              </p>
-            </Tile>
-          </div>
-
-          <div className="col-span-12 lg:col-span-8 grid grid-cols-2 gap-4">
-            {[
-              { h: "Design Systems", p: "Scalable UI kits and typography tuned for performance and craft." },
-              { h: "Motion & Interactions", p: "Framer-Motion driven microinteractions, scroll scenes, and reveals." },
-              { h: "Webflow / React", p: "Marketing sites or headless builds—SEO-ready, CMS-driven." },
-              { h: "Perf & Accessibility", p: "Ship light, score high. Built to be beautiful and usable for all." },
-            ].map((card, i) => (
-              <motion.div
-                key={card.h}
-                initial={{ y: 10, opacity: 0 }}
-                whileInView={{ y: 0, opacity: 1 }}
-                viewport={{ once: false, amount: 0.5 }}
-                transition={{ delay: i * 0.05 }}
-                className="rounded-3xl border border-black/5 bg-white p-6 md:p-8"
-              >
-                <h4 className="text-xl md:text-2xl font-medium mb-2" style={{ color: palette.ink }}>
-                  {card.h}
-                </h4>
-                <p className="text-sm md:text-base text-neutral-600 leading-relaxed">{card.p}</p>
-              </motion.div>
-            ))}
+            {Array(3)
+              .fill("CREATIVE DIGITAL EXPERIENCES")
+              .map((text, index) => (
+                <span key={index} className="text-[clamp(4rem,15vw,15rem)] font-black whitespace-nowrap">
+                  {text}
+                </span>
+              ))}
           </div>
         </div>
+      </div>
 
-        {/* Quote */}
-        <div className="text-center mt-16 md:mt-24 mb-16 md:mb-24">
-          <motion.blockquote
-            initial={{ opacity: 0, y: 28 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-            transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
-            className="text-[clamp(1.1rem,3vw,2rem)] font-medium leading-relaxed max-w-4xl mx-auto italic text-neutral-800"
-          >
-            “Every detail is intentional, every motion is meaningful, every click leads somewhere.”
-          </motion.blockquote>
+      <div className="relative px-4 md:px-8 w-full">
+        <div className="max-w-[1600px] mx-auto">
+          {/* Header */}
+          <div className="text-center pt-16 md:pt-24 mb-16 md:mb-20">
+            <motion.h2
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
+              transition={{ duration: 0.9, ease: "easeOut", delay: 0.1 }}
+              className="text-[clamp(2rem,8vw,8rem)] font-black leading-[0.8] mb-10"
+            >
+              What I do
+            </motion.h2>
 
-          <motion.div
-            initial={{ opacity: 0, y: 28 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-            transition={{ duration: 0.9, ease: "easeOut", delay: 0.35 }}
-            className="mt-6 text-xs font-medium tracking-[0.3em] uppercase opacity-60"
-          >
-            — NOTE HERE
-          </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
+              transition={{ duration: 0.9, ease: "easeOut", delay: 0.25 }}
+              className="w-24 h-px bg-current mx-auto mb-10"
+            />
+
+            <motion.p
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
+              transition={{ duration: 0.9, ease: "easeOut", delay: 0.4 }}
+              className="text-[clamp(1.2rem,3.8vw,2.2rem)] font-medium leading-tight max-w-5xl mx-auto text-neutral-800"
+            >
+              My goal is to transform your idea into a product where design meets effortless experience.
+            </motion.p>
+          </div>
+
+          {/* Cards */}
+          <div className="grid grid-cols-12 gap-4 items-stretch">
+            <div className="col-span-12 lg:col-span-4">
+              <Tile className="p-8 md:p-12 h-full flex flex-col justify-between">
+                <div>
+                  <p className="uppercase tracking-[0.2em] text-xs text-neutral-500">What We Do</p>
+                  <h3 className="text-4xl md:text-5xl mt-3 font-medium">We make brands move.</h3>
+                </div>
+                <p className="text-neutral-600 mt-6 leading-relaxed max-w-prose">
+                  Strategy → Visual identity → Web experiences. We combine design and engineering to ship fast, award-ready sites with measurable impact.
+                </p>
+              </Tile>
+            </div>
+
+            <div className="col-span-12 lg:col-span-8 grid grid-cols-2 gap-4">
+              {[
+                { h: "Design Systems", p: "Scalable UI kits and typography tuned for performance and craft." },
+                { h: "Motion & Interactions", p: "Framer-Motion driven microinteractions, scroll scenes, and reveals." },
+                { h: "Webflow / React", p: "Marketing sites or headless builds—SEO-ready, CMS-driven." },
+                { h: "Perf & Accessibility", p: "Ship light, score high. Built to be beautiful and usable for all." },
+              ].map((card, i) => (
+                <motion.div
+                  key={card.h}
+                  initial={{ y: 10, opacity: 0 }}
+                  whileInView={{ y: 0, opacity: 1 }}
+                  viewport={{ once: false, amount: 0.5 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="rounded-3xl border border-black/5 bg-white p-6 md:p-8"
+                >
+                  <h4 className="text-xl md:text-2xl font-medium mb-2" style={{ color: palette.ink }}>
+                    {card.h}
+                  </h4>
+                  <p className="text-sm md:text-base text-neutral-600 leading-relaxed">{card.p}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* Quote */}
+          <div className="text-center mt-16 md:mt-24 mb-16 md:mb-24">
+            <motion.blockquote
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
+              transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
+              className="text-[clamp(1.1rem,3vw,2rem)] font-medium leading-relaxed max-w-4xl mx-auto italic text-neutral-800"
+            >
+              “Every detail is intentional, every motion is meaningful, every click leads somewhere.”
+            </motion.blockquote>
+
+            <motion.div
+              initial={{ opacity: 0, y: 28 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
+              transition={{ duration: 0.9, ease: "easeOut", delay: 0.35 }}
+              className="mt-6 text-xs font-medium tracking-[0.3em] uppercase opacity-60"
+            >
+              — NOTE HERE
+            </motion.div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <style>{`
-      @keyframes scroll-horizontal {
-        0% { transform: translateX(0); }
-        100% { transform: translateX(-33.333%); }
-      }
-    `}</style>
-  </section>
-);
+      <style>{`
+        @keyframes scroll-horizontal {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-33.333%); }
+        }
+      `}</style>
+    </section>
+  );
 
   return (
     <div style={{ background: palette.bg, color: palette.ink }} className="relative min-h-[100svh]">
-      <Navigation />
+      {/* Render fixed UI via portal to avoid iOS fixed-position glitches */}
+      <Portal><Navigation /></Portal>
+
       <SceneStack ids={["home", "services", "about", "contact"]}>
         {[Hero, Services, WhatWeDo, <FooterQuad key="f" />] as any}
       </SceneStack>
 
       {/* Fixed “PROCESS” button */}
-      <AwardsButton />
+      <Portal><AwardsButton /></Portal>
+
+      {/* iOS/safari helpers */}
+      <style>{`
+        html, body, #root { background: ${palette.bg}; height: 100%; }
+        body { overscroll-behavior-y: none; }
+        * { -webkit-tap-highlight-color: transparent; }
+      `}</style>
     </div>
   );
 }
