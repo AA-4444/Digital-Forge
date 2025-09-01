@@ -225,7 +225,7 @@ const Navigation = () => {
 
 const useIsMobile = () => {
   const [m, setM] = React.useState(false);
-  useEffect(() => {
+  React.useEffect(() => {
     const mq = window.matchMedia?.("(max-width: 768px)");
     const on = () => setM(!!mq?.matches);
     on();
@@ -235,7 +235,7 @@ const useIsMobile = () => {
   return m;
 };
 
-const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
+export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
   ids,
   children,
 }) => {
@@ -244,6 +244,7 @@ const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   if (prefersReduced) {
+    // упрощённый режим без анимаций
     return (
       <div ref={containerRef}>
         {children.map((child, i) => (
@@ -270,21 +271,25 @@ const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
   const totalH = (count - 1) * 100 + 100;
 
   return (
-    <div  id="stackRoot" ref={containerRef} className="relative" style={{ height: `${totalH}vh` }}>
+    <div
+      id="stackRoot"
+      ref={containerRef}
+      className="relative"
+      style={{ height: `calc(${totalH} * 1svh)` }}
+    >
       {children.map((child, i) => {
         const start = i / count;
         const end = (i + 1) / count;
         const isLast = i === count - 1;
 
-        const baseIn = isMobile ? 0.10 : 0.12;
-        const baseOut = isMobile ? 0.10 : 0.12;
-        const heroIn = isMobile ? 0.16 : 0.20;
-        const heroOut = isMobile ? 0.16 : 0.20;
+        const baseIn = isMobile ? 0.1 : 0.12;
+        const baseOut = isMobile ? 0.1 : 0.12;
+        const heroIn = isMobile ? 0.16 : 0.2;
+        const heroOut = isMobile ? 0.16 : 0.2;
 
         const fadeIn = i === 0 ? heroIn : baseIn;
         const fadeOut = i === 0 ? heroOut : baseOut;
 
-      
         const opacity =
           i === 0
             ? useTransform(smooth, [start, end - fadeOut, end], [1, 1, 0])
@@ -292,7 +297,6 @@ const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
             ? useTransform(smooth, [start, Math.min(end, start + fadeIn), 1], [0, 1, 1])
             : useTransform(smooth, [start, start + fadeIn, end - fadeOut, end], [0, 1, 1, 0]);
 
-       
         const delta = isMobile ? 6 : 10;
         const y =
           i === 0
@@ -302,45 +306,44 @@ const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
         const z = count - i;
 
         if (isLast) {
+          // последний экран: relative, без sticky
           return (
-            <motion.section
+            <section
               key={ids[i]}
               id={ids[i]}
-             style={{
-  opacity,
-  y,
-  zIndex: z,
-  willChange: "transform, opacity",
-  contain: "paint",            
-}}
               className="relative min-h-[100svh] flex items-stretch"
+              style={{ zIndex: z }}
             >
-              <div className="w-full">{child}</div>
-            </motion.section>
+              <motion.div
+                style={{ opacity, y, willChange: "transform, opacity" }}
+                className="w-full"
+              >
+                {child}
+              </motion.div>
+            </section>
           );
         }
 
+        // все остальные: sticky + motion.div внутри
         return (
-          <motion.section
+          <section
             key={ids[i]}
             id={ids[i]}
-           style={{
-  opacity,
-  y,
-  zIndex: z,
-  willChange: "transform, opacity",
-  contain: "paint",
-}}
-            className="sticky top-0 h-[100vh] flex items-center"
+            className="sticky top-0 h-[100svh] flex items-center"
+            style={{ zIndex: z }}
           >
-            <div className="w-full">{child}</div>
-          </motion.section>
+            <motion.div
+              style={{ opacity, y, willChange: "transform, opacity" }}
+              className="w-full h-full flex items-center"
+            >
+              <div className="w-full">{child}</div>
+            </motion.div>
+          </section>
         );
       })}
     </div>
   );
 };
-
 // ---------- Reusable tiles ----------
 const Tile = ({ children, className = "", onClick }: any) => (
   <motion.div
@@ -394,6 +397,8 @@ const gradient = (i: number) =>
 
 // ---------- Footer ----------
 const CTAButton: React.FC = () => {
+  const [active, setActive] = React.useState(false);
+
   return (
     <motion.a
       href="#contact"
@@ -402,41 +407,49 @@ const CTAButton: React.FC = () => {
         document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
       }}
       className="relative inline-block isolate focus:outline-none"
-      initial={false}                 // <— не наследуем initial от родителей (reveal)
-      whileTap={{ scale: 0.98 }}      // тактильный отклик
+      initial={false}
+      animate={active ? "hover" : "rest"}
+      whileTap={{ scale: 0.98 }}
+      // desktop
+      onMouseEnter={() => setActive(true)}
+      onMouseLeave={() => setActive(false)}
+      // iOS / touch
+      onPointerDown={() => setActive(true)}
+      onPointerUp={() => setActive(false)}
+      onPointerCancel={() => setActive(false)}
+      onPointerLeave={() => setActive(false)}
+      // a11y
+      onFocus={() => setActive(true)}
+      onBlur={() => setActive(false)}
       role="button"
       tabIndex={0}
       style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
+      variants={{ rest: {}, hover: {} }}
     >
-      {/* Контейнер */}
-      <div className="relative z-10 px-8 sm:px-10 md:px-12 py-5 sm:py-5 md:py-6 border border-white/80 text-[10px] sm:text-[11px] font-medium tracking-[0.35em] sm:tracking-[0.4em] uppercase overflow-hidden">
-        
-        {/* Текст — без variants, чистый whileHover */}
+      <motion.div
+        className="relative z-10 px-8 sm:px-10 md:px-12 py-5 sm:py-5 md:py-6 border border-white/80 text-[10px] sm:text-[11px] font-medium tracking-[0.35em] sm:tracking-[0.4em] uppercase overflow-hidden"
+        variants={{ rest: {}, hover: {} }}
+      >
         <motion.span
           className="relative z-20"
-          initial={{ color: "#FFFFFF" }}
-          whileHover={{ color: "#000000" }}
+          variants={{ rest: { color: "#FFFFFF" }, hover: { color: "#000000" } }}
           transition={{ duration: 0.35, ease: "easeOut" }}
         >
           Start Project
         </motion.span>
 
-        {/* Слайдер-оверлей */}
         <motion.span
           className="absolute inset-0 z-10 pointer-events-none"
           style={{ background: "#FFFFFF" }}
-          initial={{ x: "-100%" }}
-          whileHover={{ x: "0%" }}
+          variants={{ rest: { x: "-100%" }, hover: { x: "0%" } }}
           transition={{ duration: 0.35, ease: "easeOut" }}
         />
-      </div>
+      </motion.div>
 
-      {/* Фоновый «пульс» */}
       <motion.span
         className="absolute inset-0 -z-10"
         style={{ background: "#FFFFFF" }}
-        initial={{ scale: 0, opacity: 0 }}
-        whileHover={{ scale: 1, opacity: 0.15 }}
+        variants={{ rest: { scale: 0, opacity: 0 }, hover: { scale: 1, opacity: 0.15 } }}
         transition={{ duration: 0.25, ease: "easeOut" }}
       />
     </motion.a>
