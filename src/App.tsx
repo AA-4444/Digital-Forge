@@ -888,21 +888,23 @@ export default function App() {
     </div>
   );
 
-  const WhatWeDo = (
+ const WhatWeDo = (
   <section
     id="about"
     className="relative"
     style={{
       color: palette.ink,
       background: palette.bg,
-      minHeight: "calc(100dvh + env(safe-area-inset-top) + env(safe-area-inset-bottom))",
+      minHeight: "calc(120dvh + env(safe-area-inset-top) + env(safe-area-inset-bottom))",
       paddingTop: "calc(env(safe-area-inset-top) + 20px)",
+      paddingBottom: "calc(env(safe-area-inset-bottom) + 40px)",
       contain: "content",
       overflow: "visible",
+      willChange: "auto",
     }}
   >
-    <div className="absolute inset-0 pointer-events-none select-none opacity-5">
-      <div className="absolute top-[60%] left-0 w-full -translate-y-1/2">
+    <div className="absolute inset-0 pointer-events-none select-none opacity-5" style={{ zIndex: -1 }}>
+      <div className="absolute top-[70%] left-0 w-full -translate-y-1/2">
         <div
           className="flex space-x-16"
           style={{ animation: "scroll-horizontal 100s linear infinite", width: "calc(300% + 128px)" }}
@@ -910,7 +912,7 @@ export default function App() {
           {Array(3)
             .fill("CREATIVE DIGITAL EXPERIENCES")
             .map((text, index) => (
-              <span key={index} className="text-[clamp(3rem,12vw,12rem)] font-black whitespace-nowrap">
+              <span key={index} className="text-[clamp(2.5rem,10vw,10rem)] font-black whitespace-nowrap">
                 {text}
               </span>
             ))}
@@ -920,13 +922,13 @@ export default function App() {
 
     <div className="relative px-4 md:px-8 w-full">
       <div className="max-w-[1600px] mx-auto">
-        <div className="text-center pt-20 md:pt-28 mb-20 md:mb-24">
+        <div className="text-center pt-16 md:pt-20 mb-16 md:mb-20">
           <motion.h2
             initial={{ opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.4, margin: "0px 0px -20% 0px" }}
-            transition={{ duration: 0.9, ease: "easeOut", delay: 0.05 }}
-            className="text-[clamp(1.8rem,7vw,7rem)] font-black leading-[0.8] mb-10"
+            viewport={{ once: true, amount: 0.5, margin: "0px 0px -30% 0px" }}
+            transition={{ duration: 0.9, ease: "easeOut", delay: 0.02 }}
+            className="text-[clamp(1.6rem,6.5vw,6.5rem)] font-black leading-[0.8] mb-10"
           >
             What I do
           </motion.h2>
@@ -934,17 +936,17 @@ export default function App() {
           <motion.div
             initial={{ opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.4, margin: "0px 0px -20% 0px" }}
-            transition={{ duration: 0.9, ease: "easeOut", delay: 0.15 }}
+            viewport={{ once: true, amount: 0.5, margin: "0px 0px -30% 0px" }}
+            transition={{ duration: 0.9, ease: "easeOut", delay: 0.1 }}
             className="w-24 h-px bg-current mx-auto mb-10"
           />
 
           <motion.p
             initial={{ opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.4, margin: "0px 0px -20% 0px" }}
-            transition={{ duration: 0.9, ease: "easeOut", delay: 0.3 }}
-            className="text-[clamp(1rem,3.5vw,2rem)] font-medium leading-tight max-w-5xl mx-auto text-neutral-800"
+            viewport={{ once: true, amount: 0.5, margin: "0px 0px -30% 0px" }}
+            transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
+            className="text-[clamp(0.9rem,3.2vw,1.8rem)] font-medium leading-tight max-w-5xl mx-auto text-neutral-800"
           >
             My goal is to transform your idea into a product where design meets effortless experience.
           </motion.p>
@@ -991,9 +993,9 @@ export default function App() {
           <motion.blockquote
             initial={{ opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.4, margin: "0px 0px -20% 0px" }}
+            viewport={{ once: true, amount: 0.5, margin: "0px 0px -30% 0px" }}
             transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
-            className="text-[clamp(1rem,3vw,2rem)] font-medium leading-relaxed max-w-4xl mx-auto italic text-neutral-800"
+            className="text-[clamp(0.9rem,3vw,1.8rem)] font-medium leading-relaxed max-w-4xl mx-auto italic text-neutral-800"
           >
             “Every detail is intentional, every motion is meaningful, every click leads somewhere.”
           </motion.blockquote>
@@ -1001,7 +1003,7 @@ export default function App() {
           <motion.div
             initial={{ opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.4, margin: "0px 0px -20% 0px" }}
+            viewport={{ once: true, amount: 0.5, margin: "0px 0px -30% 0px" }}
             transition={{ duration: 0.9, ease: "easeOut", delay: 0.35 }}
             className="mt-6 text-xs font-medium tracking-[0.3em] uppercase opacity-60"
           >
