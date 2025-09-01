@@ -233,14 +233,13 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // на iOS часто отрубает анимации → принудительно оставляем
+  // всегда анимации
   const prefersReduced = false;
 
-  // реальный viewport height (фикс полоски и зазоров)
+  // реальная высота экрана
   const [vhPx, setVhPx] = useState(
     typeof window !== "undefined" ? window.innerHeight : 0
   );
-
   useEffect(() => {
     const recalc = () => setVhPx(window.innerHeight);
     recalc();
@@ -282,7 +281,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
       ref={containerRef}
       className="relative"
       style={{
-        height: `${count * vhPx - 1}px`, // -1px чтобы не было белой полоски снизу
+        height: `${count * vhPx}px`,
         background: palette.bg,
       }}
     >
@@ -298,39 +297,23 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           ? useTransform(smooth, [start, end - fade, end], [1, 1, 0])
           : useTransform(smooth, [start, start + fade, end - fade, end], [0, 1, 1, 0]);
 
-        return isLast ? (
+        return (
           <section
             key={ids[i]}
             id={ids[i]}
-            className="relative flex items-stretch -mt-px"
-            style={{ minHeight: vhPx, zIndex: 1 }}
-          >
-            <motion.div
-              style={{
-                opacity,
-                willChange: "opacity",
-                WebkitBackfaceVisibility: "hidden",
-                backfaceVisibility: "hidden",
-              }}
-              className="w-full"
-            >
-              {child}
-            </motion.div>
-          </section>
-        ) : (
-          <section
-            key={ids[i]}
-            id={ids[i]}
-            className="sticky top-0 -mt-px"
+            className={`${isLast ? "relative flex items-stretch" : "sticky top-0"} ${
+              i > 0 ? "-mt-px" : ""
+            }`}
             style={{
               height: vhPx,
-              zIndex: count - i,
+              minHeight: vhPx,
+              zIndex: isLast ? 1 : count - i,
               WebkitBackfaceVisibility: "hidden",
               backfaceVisibility: "hidden",
             }}
           >
             <motion.div
-              className="absolute inset-0"
+              className="absolute inset-0 w-full h-full"
               style={{
                 opacity,
                 willChange: "opacity",
