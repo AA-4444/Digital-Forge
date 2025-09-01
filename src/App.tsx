@@ -86,7 +86,7 @@ const Navigation = () => {
     const vh = (window.visualViewport?.height ?? window.innerHeight);
 
   
-    let target = Math.round(rootTop + idx * vh) + 1;
+    let target = Math.round(rootTop + idx * vh) + 2;
 
    
     const max = Math.max(0, document.documentElement.scrollHeight - vh);
@@ -221,6 +221,7 @@ const Navigation = () => {
   );
 };
 
+
 // ---------- Scene Stack (smooth sticky crossfade, stabilized) ----------
 
 const useIsMobile = () => {
@@ -234,12 +235,22 @@ const useIsMobile = () => {
   }, []);
   return m;
 };
+const useRespectReducedMotion = () => {
+  const sysPrefers = useReducedMotion();
+  const [force, setForce] = React.useState(false);
+
+  React.useEffect(() => {
+    setForce(typeof window !== "undefined" && localStorage.getItem("forceAnimations") === "1");
+  }, []);
+
+  return sysPrefers && !force;
+};
 
 export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
   ids,
   children,
 }) => {
-  const prefersReduced = useReducedMotion();
+  const prefersReduced = useRespectReducedMotion();  
   const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -275,7 +286,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
       id="stackRoot"
       ref={containerRef}
       className="relative"
-      style={{ height: `calc(${totalH} * 1svh)` }}
+      style={{ height: `calc(${totalH} * 1svh + 1px)` }}
     >
       {children.map((child, i) => {
         const start = i / count;
@@ -311,7 +322,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
             <section
               key={ids[i]}
               id={ids[i]}
-              className="relative min-h-[100svh] flex items-stretch"
+              className="relative min-h-[calc(100svh+1px)] flex items-stretch"
               style={{ zIndex: z }}
             >
               <motion.div
@@ -329,7 +340,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           <section
             key={ids[i]}
             id={ids[i]}
-            className="sticky top-0 h-[100svh] flex items-center"
+            className="sticky top-0 h-[100svh] flex items-center -mt-px"
             style={{ zIndex: z }}
           >
             <motion.div
