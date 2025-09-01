@@ -5,7 +5,6 @@ import {
   useScroll,
   useTransform,
   useSpring,
-
 } from "framer-motion";
 import { createPortal } from "react-dom";
 import { ArrowUpRight, Menu, X } from "lucide-react";
@@ -17,7 +16,7 @@ const palette = {
   mute: "#7E7E7E",
   card: "#FFFFFF",
   blue: "#0A3CC2",
-  dark: "#161616",
+  dark: "#1E1E1E",
 };
 
 /* ---------- Portal ---------- */
@@ -86,7 +85,7 @@ const Navigation = () => {
       const rootTop = (window.scrollY || window.pageYOffset) + root.getBoundingClientRect().top;
       const vh = window.visualViewport?.height ?? window.innerHeight;
 
-      let target = Math.round(rootTop + idx * vh) + 2;
+      let target = Math.round(rootTop + idx * vh);
       const max = Math.max(0, document.documentElement.scrollHeight - vh);
       target = Math.min(Math.max(target, 0), max);
 
@@ -100,7 +99,6 @@ const Navigation = () => {
 
   return (
     <>
-      {/* Фикс-кнопка Menu: высокий z-index и сдвиг от safe-area, чтобы не закрывать контент */}
       <div
         className="fixed z-50"
         style={{
@@ -221,49 +219,64 @@ const Navigation = () => {
   );
 };
 
-/* ---------- Reduced motion (как было) ---------- */
+/* ---------- Detect iOS ---------- */
+const useIsIOS = () => {
+  const [isIOS, setIsIOS] = React.useState(false);
+  React.useEffect(() => {
+    const userAgent = navigator.userAgent || '';
+    const platform = navigator.platform || '';
+    const isIOSDevice =
+      (/iPad|iPhone|iPod/.test(userAgent) || /iPad|iPhone|iPod/.test(platform)) &&
+      !/Windows Phone|WinCE/.test(userAgent);
+    setIsIOS(isIOSDevice);
+  }, []);
+  return isIOS;
+};
 
-
-/* ---------- Scene Stack (как в рабочем варианте) ---------- */
-
+/* ---------- Scene Stack (с фиксами) ---------- */
+const useIsMobile = () => {
+  const [m, setM] = React.useState(false);
+  React.useEffect(() => {
+    const mq = window.matchMedia?.("(max-width: 768px)");
+    const on = () => setM(!!mq?.matches);
+    on();
+    mq?.addEventListener?.("change", on);
+    return () => mq?.removeEventListener?.("change", on);
+  }, []);
+  return m;
+};
 
 export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
   ids,
   children,
 }) => {
+  const isMobile = useIsMobile();
+  const isIOS = useIsIOS();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Стабильная высота экрана (iOS адресная строка)
-  const [vhPx, setVhPx] = useState<number>(0);
   useEffect(() => {
-    const get = () => Math.round(window.visualViewport?.height ?? window.innerHeight);
-    const recalc = () => setVhPx(get());
-    recalc();
-    window.addEventListener("resize", recalc, { passive: true });
-    window.visualViewport?.addEventListener?.("resize", recalc);
-    return () => {
-      window.removeEventListener("resize", recalc);
-      window.visualViewport?.removeEventListener?.("resize", recalc as any);
+    const updateHeight = () => {
+      if (containerRef.current) {
+        const totalH = children.length * 100;
+        const vh = window.innerHeight * 0.01;
+        containerRef.current.style.height = `calc(${totalH} * ${vh}px)`;
+      }
     };
-  }, []);
-
-  if (!vhPx) {
-    return (
-      <div id="stackRoot" ref={containerRef}>
-        {children.map((child, i) => (
-          <section key={ids[i]} id={ids[i]}>
-            {child}
-          </section>
-        ))}
-      </div>
-    );
-  }
+    updateHeight();
+    window.addEventListener('resize', updateHeight, { passive: true });
+    return () => window.removeEventListener('resize', updateHeight);
+  }, [children.length]);
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start start", "end end"],
   });
-  const p = useSpring(scrollYProgress, { stiffness: 160, damping: 42, mass: 0.6 });
+
+  const smooth = useSpring(scrollYProgress, {
+    stiffness: 160,
+    damping: 42,
+    mass: 0.6,
+  });
 
   const count = children.length;
 
@@ -272,43 +285,52 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
       id="stackRoot"
       ref={containerRef}
       className="relative"
-      style={{
-        // Ровно N экранов + 1px снизу как буфер (не срезает макушку)
-        height: `${count * vhPx + 1}px`,
-        background: "#E8E4E2",
-        overflow: "visible",
-        WebkitBackfaceVisibility: "hidden",
-        backfaceVisibility: "hidden",
-      }}
+      style={{ background: palette.bg }}
     >
       {children.map((child, i) => {
-        const isLast = i === count - 1;
         const start = i / count;
         const end = (i + 1) / count;
-        const fade = 0.22;
+        const isLast = i === count - 1;
 
-        const opacity = isLast
-          ? useTransform(p, [start, Math.min(end, start + fade), 1], [0, 1, 1])
-          : i === 0
-          ? useTransform(p, [start, end - fade, end], [1, 1, 0])
-          : useTransform(p, [start, start + fade, end - fade, end], [0, 1, 1, 0]);
+        const baseIn = isMobile ? 0.1 : 0.12;
+        const baseOut = isMobile ? 0.1 : 0.12;
+        const heroIn = isMobile ? 0.16 : 0.2;
+        const heroOut = isMobile ? 0.16 : 0.2;
+
+        const fadeIn = i === 0 ? heroIn : baseIn;
+        const fadeOut = i === 0 ? heroOut : baseOut;
+
+        const opacity =
+          i === 0
+            ? useTransform(smooth, [start, end - fadeOut, end], [1, 1, 0])
+            : isLast
+            ? useTransform(smooth, [start, Math.min(end, start + fadeIn), 1], [0, 1, 1])
+            : useTransform(smooth, [start, start + fadeIn, end - fadeOut, end], [0, 1, 1, 0]);
+
+        const delta = isIOS ? 0 : (isMobile ? 6 : 10);
+        const y =
+          i === 0
+            ? useTransform(smooth, [start, end], [0, -delta])
+            : useTransform(smooth, [start, end], [delta, isLast ? 0 : -delta]);
+
+        const z = count - i;
 
         if (isLast) {
-          // Финальная секция — обычная, без sticky
           return (
             <section
               key={ids[i]}
               id={ids[i]}
-              className="relative"
-              style={{ minHeight: vhPx, zIndex: 1, background: "inherit" }}
+              className="relative min-h-[100dvh] flex items-stretch"
+              style={{ zIndex: z }}
             >
               <motion.div
                 style={{
                   opacity,
-                  willChange: "opacity",
+                  y,
+                  willChange: "opacity, transform",
                   WebkitBackfaceVisibility: "hidden",
-                  backfaceVisibility: "hidden",
                 }}
+                className="w-full"
               >
                 {child}
               </motion.div>
@@ -316,38 +338,27 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           );
         }
 
-        // Промежуточные — sticky без отрицательных отступов
         return (
           <section
             key={ids[i]}
             id={ids[i]}
-            className="sticky top-0"
-            style={{
-              height: vhPx,
-              zIndex: count - i,
-              background: "inherit",
-              WebkitBackfaceVisibility: "hidden",
-              backfaceVisibility: "hidden",
-            }}
+            className="sticky top-0 h-[100dvh] flex items-center"
+            style={{ zIndex: z }}
           >
             <motion.div
               style={{
-                height: "100%",
-                width: "100%",
                 opacity,
-                willChange: "opacity",
+                y,
+                willChange: "opacity, transform",
                 WebkitBackfaceVisibility: "hidden",
-                backfaceVisibility: "hidden",
               }}
+              className="w-full h-full flex items-center"
             >
-              {child}
+              <div className="w-full">{child}</div>
             </motion.div>
           </section>
         );
       })}
-
-      {/* 1px-спейсер в самом низу, чтобы закрыть возможный «волосок» без сдвига секций */}
-      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1, background: "inherit" }} />
     </div>
   );
 };
@@ -364,7 +375,7 @@ const Tile = ({ children, className = "", onClick }: any) => (
   </motion.div>
 );
 
-/* ====== ReadyTile ====== */
+/* ------ ReadyTile ------ */
 const ReadyTile = () => (
   <Tile className="h-full p-6 md:p-8 flex flex-col justify-between min-h-0">
     <div className="space-y-2">
@@ -469,10 +480,9 @@ export const FooterQuad = () => {
   return (
     <section
       id="contact"
-      className="relative min-h-[100svh] flex items-stretch overflow-hidden"
-      style={{ background: "#1E1E1E", color: "#FFF" }}
+      className="relative min-h-[100dvh] flex items-stretch overflow-hidden"
+      style={{ background: palette.dark, color: "#FFF" }}
     >
-      {/* Background marquee */}
       <div className="absolute inset-0 pointer-events-none select-none overflow-hidden opacity-5">
         <div className="absolute left-0 w-full h-full top-[8vh] sm:top-0">
           <div
@@ -493,7 +503,6 @@ export const FooterQuad = () => {
         </div>
       </div>
 
-      {/* Content */}
       <div className="relative max-w-[1400px] mx-auto w-full px-4 sm:px-6 md:px-10 sm:py-14 md:py-16 flex flex-col justify-between mt-[10vh] sm:mt-0 py-8">
         <div className="text-center mb-8 sm:mb-14 md:mb-16">
           <motion.h2
@@ -512,7 +521,6 @@ export const FooterQuad = () => {
           </motion.div>
         </div>
 
-        {/* Services */}
         <motion.div {...reveal(0.3)} className="text-center mb-6 sm:mb-12 md:mb-14">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 md:gap-8 text-[10px] sm:text-xs font-medium tracking-[0.25em] sm:tracking-[0.3em] uppercase">
             {services.map((service, index) => (
@@ -533,7 +541,6 @@ export const FooterQuad = () => {
           </div>
         </motion.div>
 
-        {/* Bottom bar */}
         <motion.div
           {...reveal(0.5)}
           className="pt-5 sm:pt-8 md:pt-10 border-t border-white/15 flex flex-col md:flex-row items-center justify-between gap-2 sm:gap-4"
@@ -567,7 +574,7 @@ export const FooterQuad = () => {
   );
 };
 
-/* ---------- AwardsButton (фикс: высокий слой и safe-area отступ) ---------- */
+/* ---------- AwardsButton ---------- */
 const useIsTouch = () => {
   const [isTouch, setIsTouch] = useState(false);
   useEffect(() => {
@@ -575,8 +582,6 @@ const useIsTouch = () => {
     const hasTouch =
       "ontouchstart" in window ||
       navigator.maxTouchPoints > 0 ||
-      // @ts-ignore
-      navigator.msMaxTouchPoints > 0 ||
       !!coarse;
     setIsTouch(!!hasTouch);
   }, []);
@@ -715,7 +720,6 @@ export default function App() {
     document.documentElement.style.scrollBehavior = "smooth";
   }, []);
 
-  /* Hero получает безопасный верхний отступ, чтобы кнопка Menu его не перекрывала */
   const Hero = (
     <div className="px-4 md:px-8 w-full hero-safe" id="home">
       <motion.div
@@ -730,7 +734,6 @@ export default function App() {
         }}
         className="grid grid-cols-12 md:grid-rows-2 gap-3 md:gap-5 max-w-[1600px] mx-auto md:h-[78vh]"
       >
-        {/* Title */}
         <Tile className="col-span-12 md:col-span-8 md:row-span-1 aspect-[2/1] md:aspect-auto md:h-full p-6 md:p-10 flex items-end">
           <motion.h1
             variants={{
@@ -743,7 +746,6 @@ export default function App() {
           </motion.h1>
         </Tile>
 
-        {/* Blue tile */}
         <motion.div
           variants={{
             hidden: { opacity: 0, y: 18 },
@@ -764,7 +766,6 @@ export default function App() {
           </Tile>
         </motion.div>
 
-        {/* Ready */}
         <motion.div
           variants={{
             hidden: { opacity: 0, y: 18 },
@@ -775,7 +776,6 @@ export default function App() {
           <ReadyTile />
         </motion.div>
 
-        {/* Gradient grid */}
         <motion.div
           variants={{
             hidden: { opacity: 0, y: 18 },
@@ -903,7 +903,6 @@ export default function App() {
 
       <div className="relative px-4 md:px-8 w-full">
         <div className="max-w-[1600px] mx-auto">
-          {/* Header */}
           <div className="text-center pt-16 md:pt-24 mb-16 md:mb-20">
             <motion.h2
               initial={{ opacity: 0, y: 28 }}
@@ -934,7 +933,6 @@ export default function App() {
             </motion.p>
           </div>
 
-          {/* Cards */}
           <div className="grid grid-cols-12 gap-4 items-stretch">
             <div className="col-span-12 lg:col-span-4">
               <Tile className="p-8 md:p-12 h-full flex flex-col justify-between">
@@ -972,7 +970,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Quote */}
           <div className="text-center mt-16 md:mt-24 mb-16 md:mb-24">
             <motion.blockquote
               initial={{ opacity: 0, y: 28 }}
@@ -1007,29 +1004,31 @@ export default function App() {
   );
 
   return (
-    <div style={{ background: palette.bg, color: palette.ink }} className="relative min-h-[100svh]">
-      {/* фикс-UI через портал — всегда поверх сцен */}
+    <div style={{ background: palette.bg, color: palette.ink }} className="relative min-h-[100dvh]">
       <Portal><Navigation /></Portal>
-
       <SceneStack ids={["home", "services", "about", "contact"]}>
         {[Hero, Services, WhatWeDo, <FooterQuad key="f" />] as any}
       </SceneStack>
-
-      {/* Fixed “PROCESS” button поверх всего */}
       <Portal><AwardsButton /></Portal>
-
-      {/* Глобальные стили и безопасный отступ у Hero под кнопку Menu */}
       <style>{`
-        html, body, #root { background: ${palette.bg}; height: 100%; }
-        body { overscroll-behavior-y: none; }
-        * { -webkit-tap-highlight-color: transparent; }
-
-        /* Чтобы на старте контент не попадал под фикс-кнопку Menu */
+        html, body, #root {
+          background: ${palette.bg};
+          height: 100%;
+          min-height: -webkit-fill-available;
+        }
+        body {
+          overscroll-behavior-y: none;
+        }
+        * {
+          -webkit-tap-highlight-color: transparent;
+        }
         .hero-safe {
           padding-top: calc(env(safe-area-inset-top) + 72px);
         }
         @media (min-width: 768px) {
-          .hero-safe { padding-top: 32px; }
+          .hero-safe {
+            padding-top: 32px;
+          }
         }
       `}</style>
     </div>
