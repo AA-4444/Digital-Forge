@@ -527,25 +527,7 @@ export const FooterQuad = () => {
 };
 
 // ---------- Scenes ----------
-const CaseCard = ({ title, i }: { title: string; i: number }) => (
-  <motion.div
-    className="rounded-3xl overflow-hidden border border-black/5 bg-white"
-    initial={{ clipPath: "inset(0 0 100% 0)", opacity: 0 }}
-    whileInView={{ clipPath: "inset(0 0 0% 0)", opacity: 1 }}
-    viewport={{ once: false, amount: 0.5 }}
-    transition={{ duration: 0.9, ease: [0.19, 1, 0.22, 1] }}
-  >
-    <div style={{ background: gradient(i) }} className="aspect-[16/10] w-full" />
-    <div className="p-5 flex items-center justify-between">
-      <h4 className="text-lg md:text-xl" style={{ color: palette.ink }}>
-        {title}
-      </h4>
-      <motion.div whileHover={{ x: 4 }} className="text-sm text-neutral-500">
-        view <ArrowUpRight className="inline-block ml-1" size={16} />
-      </motion.div>
-    </div>
-  </motion.div>
-);
+
 
 // ---------- AwardsButton ----------
 const useIsTouch = () => {
