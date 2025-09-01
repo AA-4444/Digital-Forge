@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   motion,
   AnimatePresence,
   useScroll,
-  useTransform,
   useSpring,
+  useTransform,
   useReducedMotion,
 } from "framer-motion";
 import { createPortal } from "react-dom";
@@ -26,6 +26,22 @@ const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
   return createPortal(children, document.body);
+};
+
+/* ---------- iOS helpers ---------- */
+const setVHUnit = () => {
+  const vh = window.visualViewport?.height ?? window.innerHeight;
+  document.documentElement.style.setProperty("--vh", `${vh * 0.01}px`);
+};
+
+/* ---------- Reduced motion (но не ломаем анимации на iOS) ---------- */
+const useRespectReducedMotion = () => {
+  const sysPrefers = useReducedMotion();
+  const [forceOn, setForceOn] = React.useState(false);
+  React.useEffect(() => {
+    setForceOn(localStorage.getItem("forceAnimations") === "1");
+  }, []);
+  return sysPrefers && !forceOn;
 };
 
 /* ---------- Navigation ---------- */
@@ -70,43 +86,53 @@ const Navigation = () => {
     return () => window.removeEventListener("resize", calc);
   }, []);
 
+  // Программный скролл по слоям SceneStack
   const scrollToSection = (id: InternalItem["sectionId"]) => {
     close();
     setTimeout(() => {
-      const sectionOrder: InternalItem["sectionId"][] = ["home", "services", "about", "contact"];
-      const idx = sectionOrder.indexOf(id);
+      const order: InternalItem["sectionId"][] = ["home", "services", "about", "contact"];
+      const idx = order.indexOf(id);
       if (idx < 0) return;
 
       const root = document.getElementById("stackRoot");
+      const spacer = document.getElementById("stackSpacer");
+      const overlayCount = Number(root?.getAttribute("data-overlay-count") || 0);
+      const vh = window.visualViewport?.height ?? window.innerHeight;
+
       if (!root) {
         document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
         return;
       }
 
       const rootTop = (window.scrollY || window.pageYOffset) + root.getBoundingClientRect().top;
-      const vh = window.visualViewport?.height ?? window.innerHeight;
+      let target: number;
+      if (idx < overlayCount) {
+        target = Math.round(rootTop + idx * vh);
+      } else {
+        // футер идёт сразу после липкой зоны
+        if (spacer) {
+          const after = (window.scrollY || window.pageYOffset) + spacer.getBoundingClientRect().top;
+          target = Math.round(after);
+        } else {
+          target = Math.round(rootTop + overlayCount * vh);
+        }
+      }
 
-      let target = Math.round(rootTop + idx * vh) + 2;
       const max = Math.max(0, document.documentElement.scrollHeight - vh);
       target = Math.min(Math.max(target, 0), max);
-
       window.scrollTo({ top: target, behavior: "smooth" });
 
       try {
         history.replaceState(null, "", `#${id}`);
       } catch {}
-    }, 80);
+    }, 50);
   };
 
   return (
     <>
-      {/* Фикс-кнопка Menu: высокий z-index и сдвиг от safe-area, чтобы не закрывать контент */}
       <div
-        className="fixed z-50"
-        style={{
-          top: "calc(env(safe-area-inset-top) + 14px)",
-          left: "1.5rem",
-        }}
+        className="fixed z-[60]"
+        style={{ top: "calc(env(safe-area-inset-top) + 14px)", left: "1.5rem" }}
       >
         <button
           onPointerUp={toggle}
@@ -133,7 +159,7 @@ const Navigation = () => {
             id="nav-panel"
             role="dialog"
             aria-modal="true"
-            className="fixed z-50"
+            className="fixed z-[70]"
             style={{
               top: "calc(env(safe-area-inset-top) + 12px)",
               left: "1.5rem",
@@ -150,10 +176,7 @@ const Navigation = () => {
               className="relative shadow-xl rounded-3xl overflow-hidden h-full w-full"
               style={{ background: palette.blue, color: "#fff" }}
             >
-              <div
-                className="px-5 py-4"
-                style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
-              >
+              <div className="px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
                 <div className="flex justify-between items-center">
                   <span className="uppercase text-[11px] tracking-[0.4em] leading-none">close</span>
                   <button
@@ -221,17 +244,7 @@ const Navigation = () => {
   );
 };
 
-/* ---------- Reduced motion (как было) ---------- */
-const useRespectReducedMotion = () => {
-  const sysPrefers = useReducedMotion();
-  const [force, setForce] = React.useState(false);
-  React.useEffect(() => {
-    setForce(typeof window !== "undefined" && localStorage.getItem("forceAnimations") === "1");
-  }, []);
-  return sysPrefers && !force;
-};
-
-/* ---------- Scene Stack (как в рабочем варианте) ---------- */
+/* ---------- Stack (1 sticky viewport + overlay slides) ---------- */
 const useIsMobile = () => {
   const [m, setM] = React.useState(false);
   React.useEffect(() => {
@@ -250,118 +263,132 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
 }) => {
   const prefersReduced = useRespectReducedMotion();
   const isMobile = useIsMobile();
-  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // последние дети — это ФУТЕР (реальная секция), все предыдущие — оверлеи
+  const overlayScenes = useMemo(() => children.slice(0, -1) as React.ReactNode[], [children]);
+  const footer = useMemo(() => children[children.length - 1] as React.ReactNode, [children]);
+  const overlayCount = overlayScenes.length;
+
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const stickyRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setVHUnit();
+    const onRes = () => setVHUnit();
+    window.addEventListener("resize", onRes, { passive: true });
+    window.visualViewport?.addEventListener?.("resize", onRes);
+    return () => {
+      window.removeEventListener("resize", onRes);
+      window.visualViewport?.removeEventListener?.("resize", onRes as any);
+    };
+  }, []);
 
   if (prefersReduced) {
+    // Пониженное движение: просто обычные секции
     return (
-      <div ref={containerRef}>
-        {children.map((child, i) => (
+      <>
+        {overlayScenes.map((child, i) => (
           <section key={ids[i]} id={ids[i]} className="min-h-[100vh] flex items-center">
             <div className="w-full">{child}</div>
           </section>
         ))}
-      </div>
+        <section id={ids[ids.length - 1]}>{footer}</section>
+      </>
     );
   }
 
+  // Высота контейнера = (overlayCount) * 100vh, внутри один sticky-вьюпорт 100vh,
+  // анимируем абсолютные слои по scrollYProgress контейнера.
   const { scrollYProgress } = useScroll({
-    target: containerRef,
+    target: rootRef,
     offset: ["start start", "end end"],
   });
 
-  const smooth = useSpring(scrollYProgress, {
-    stiffness: 160,
-    damping: 42,
-    mass: 0.6,
-  });
-
-  const count = children.length;
-  const totalH = (count - 1) * 100 + 100;
+  const t = useSpring(scrollYProgress, { stiffness: 160, damping: 42, mass: 0.6 });
 
   return (
-    <div
-      id="stackRoot"
-      ref={containerRef}
-      className="relative"
-      /* важно: 1svh + 1px — так sticky-слои стыкуются без щелей */
-      style={{ height: `calc(${totalH} * 1svh + 1px)`, background: palette.bg }}
-    >
-      {children.map((child, i) => {
-        const start = i / count;
-        const end = (i + 1) / count;
-        const isLast = i === count - 1;
+    <>
+      <div
+        id="stackRoot"
+        ref={rootRef}
+        data-overlay-count={overlayCount}
+        className="relative"
+        style={{
+          height: `calc(${overlayCount} * var(--vh, 1vh) * 100)`,
+          background: palette.bg,
+          // НИКАКИХ transform у контейнера: иначе sticky и fixed ломаются
+          transform: "none",
+          WebkitTransform: "none",
+          willChange: "auto",
+          overflow: "visible",
+        }}
+      >
+        <div
+          ref={stickyRef}
+          className="sticky top-0"
+          style={{
+            height: "calc(var(--vh, 1vh) * 100)",
+            // отдельный слой не нужен: без transform
+            overflow: "visible",
+          }}
+        >
+          <div className="relative w-full h-full">
+            {overlayScenes.map((child, i) => {
+              // локальный прогресс сцены i: 0..1 когда окно «проходит» её долю
+              const start = i / overlayCount;
+              const end = (i + 1) / overlayCount;
+              // clamp local progress
+              const p = useTransform(t, (v) => {
+                const vv = (v - start) / (end - start);
+                return Math.min(1, Math.max(0, vv));
+              });
 
-        const baseIn = isMobile ? 0.1 : 0.12;
-        const baseOut = isMobile ? 0.1 : 0.12;
-        const heroIn = isMobile ? 0.16 : 0.2;
-        const heroOut = isMobile ? 0.16 : 0.2;
+              // кросс-фейд (без швов)
+              const isFirst = i === 0;
+              const isLast = i === overlayCount - 1;
 
-        const fadeIn = i === 0 ? heroIn : baseIn;
-        const fadeOut = i === 0 ? heroOut : baseOut;
+              const fadeIn = isMobile ? 0.18 : 0.22;
+              const fadeOut = isMobile ? 0.18 : 0.22;
 
-        const opacity =
-          i === 0
-            ? useTransform(smooth, [start, end - fadeOut, end], [1, 1, 0])
-            : isLast
-            ? useTransform(smooth, [start, Math.min(end, start + fadeIn), 1], [0, 1, 1])
-            : useTransform(smooth, [start, start + fadeIn, end - fadeOut, end], [0, 1, 1, 0]);
+              const opacity = isFirst
+                ? useTransform(p, [0, 1 - fadeOut, 1], [1, 1, 0])
+                : isLast
+                ? useTransform(p, [0, fadeIn, 1], [0, 1, 1])
+                : useTransform(p, [0, fadeIn, 1 - fadeOut, 1], [0, 1, 1, 0]);
 
-        const delta = isMobile ? 6 : 10;
-        const y =
-          i === 0
-            ? useTransform(smooth, [start, end], [0, -delta])
-            : useTransform(smooth, [start, end], [delta, isLast ? 0 : -delta]);
+              const delta = isMobile ? 6 : 10;
+              const y = isFirst
+                ? useTransform(p, [0, 1], [0, -delta])
+                : useTransform(p, [0, 1], [delta, isLast ? 0 : -delta]);
 
-        const z = count - i;
+              return (
+                <motion.div
+                  key={i}
+                  aria-labelledby={ids[i]}
+                  className="absolute inset-0"
+                  style={{
+                    opacity,
+                    y,
+                    willChange: "transform, opacity",
+                    transform: "translateZ(0)",
+                    WebkitBackfaceVisibility: "hidden",
+                    backfaceVisibility: "hidden",
+                  }}
+                >
+                  {child}
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
-        if (isLast) {
-          return (
-            <section
-              key={ids[i]}
-              id={ids[i]}
-              className="relative min-h-[calc(100svh+1px)] flex items-stretch"
-              style={{ zIndex: z }}
-            >
-              <motion.div
-                style={{
-                  opacity,
-                  y,
-                  willChange: "transform, opacity",
-                  transform: "translateZ(0)",
-                  WebkitBackfaceVisibility: "hidden",
-                }}
-                className="w-full"
-              >
-                {child}
-              </motion.div>
-            </section>
-          );
-        }
+      {/* маленький «маяк» для расчёта позиции конца стека (навигация) */}
+      <div id="stackSpacer" style={{ height: 1 }} />
 
-        return (
-          <section
-            key={ids[i]}
-            id={ids[i]}
-            /* -mt-px убирает тонкую белую линию при скролле */
-            className="sticky top-0 h-[100svh] flex items-center -mt-px"
-            style={{ zIndex: z }}
-          >
-            <motion.div
-              style={{
-                opacity,
-                y,
-                willChange: "transform, opacity",
-                transform: "translateZ(0)",
-                WebkitBackfaceVisibility: "hidden",
-              }}
-              className="w-full h-full flex items-center"
-            >
-              <div className="w-full">{child}</div>
-            </motion.div>
-          </section>
-        );
-      })}
-    </div>
+      {/* реальный футер (он за пределами липкой области) */}
+      <section id={ids[ids.length - 1]}>{footer}</section>
+    </>
   );
 };
 
@@ -482,10 +509,9 @@ export const FooterQuad = () => {
   return (
     <section
       id="contact"
-      className="relative min-h-[100svh] flex items-stretch overflow-hidden"
+      className="relative min-h-[100dvh] flex items-stretch overflow-hidden"
       style={{ background: "#1E1E1E", color: "#FFF" }}
     >
-      {/* Background marquee */}
       <div className="absolute inset-0 pointer-events-none select-none overflow-hidden opacity-5">
         <div className="absolute left-0 w-full h-full top-[8vh] sm:top-0">
           <div
@@ -506,7 +532,6 @@ export const FooterQuad = () => {
         </div>
       </div>
 
-      {/* Content */}
       <div className="relative max-w-[1400px] mx-auto w-full px-4 sm:px-6 md:px-10 sm:py-14 md:py-16 flex flex-col justify-between mt-[10vh] sm:mt-0 py-8">
         <div className="text-center mb-8 sm:mb-14 md:mb-16">
           <motion.h2
@@ -525,7 +550,6 @@ export const FooterQuad = () => {
           </motion.div>
         </div>
 
-        {/* Services */}
         <motion.div {...reveal(0.3)} className="text-center mb-6 sm:mb-12 md:mb-14">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 md:gap-8 text-[10px] sm:text-xs font-medium tracking-[0.25em] sm:tracking-[0.3em] uppercase">
             {services.map((service, index) => (
@@ -546,7 +570,6 @@ export const FooterQuad = () => {
           </div>
         </motion.div>
 
-        {/* Bottom bar */}
         <motion.div
           {...reveal(0.5)}
           className="pt-5 sm:pt-8 md:pt-10 border-t border-white/15 flex flex-col md:flex-row items-center justify-between gap-2 sm:gap-4"
@@ -580,7 +603,7 @@ export const FooterQuad = () => {
   );
 };
 
-/* ---------- AwardsButton (фикс: высокий слой и safe-area отступ) ---------- */
+/* ---------- AwardsButton ---------- */
 const useIsTouch = () => {
   const [isTouch, setIsTouch] = useState(false);
   useEffect(() => {
@@ -631,8 +654,8 @@ const AwardsButton: React.FC = () => {
   return (
     <div
       ref={rootRef}
-      className="fixed z-50"
-      style={{ right: "1.5rem", bottom: "calc(env(safe-area-inset-bottom) + 1.25rem)" }}
+      className="fixed right-4 sm:right-6 z-[60]"
+      style={{ bottom: `calc(1.25rem + env(safe-area-inset-bottom))` }}
     >
       <button
         type="button"
@@ -726,24 +749,27 @@ const AwardsButton: React.FC = () => {
 export default function App() {
   useEffect(() => {
     document.documentElement.style.scrollBehavior = "smooth";
+    setVHUnit();
+    const onRes = () => setVHUnit();
+    window.addEventListener("resize", onRes, { passive: true });
+    window.visualViewport?.addEventListener?.("resize", onRes);
+    return () => {
+      window.removeEventListener("resize", onRes);
+      window.visualViewport?.removeEventListener?.("resize", onRes as any);
+    };
   }, []);
 
-  /* Hero получает безопасный верхний отступ, чтобы кнопка Menu его не перекрывала */
   const Hero = (
-    <div className="px-4 md:px-8 w-full hero-safe" id="home">
+    <div className="px-4 md:px-8 w-full" id="home">
       <motion.div
         initial="hidden"
         animate="show"
         variants={{
           hidden: { opacity: 1 },
-          show: {
-            opacity: 1,
-            transition: { staggerChildren: 0.08, delayChildren: 0.08 },
-          },
+          show: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.08 } },
         }}
         className="grid grid-cols-12 md:grid-rows-2 gap-3 md:gap-5 max-w-[1600px] mx-auto md:h-[78vh]"
       >
-        {/* Title */}
         <Tile className="col-span-12 md:col-span-8 md:row-span-1 aspect-[2/1] md:aspect-auto md:h-full p-6 md:p-10 flex items-end">
           <motion.h1
             variants={{
@@ -756,7 +782,6 @@ export default function App() {
           </motion.h1>
         </Tile>
 
-        {/* Blue tile */}
         <motion.div
           variants={{
             hidden: { opacity: 0, y: 18 },
@@ -777,7 +802,6 @@ export default function App() {
           </Tile>
         </motion.div>
 
-        {/* Ready */}
         <motion.div
           variants={{
             hidden: { opacity: 0, y: 18 },
@@ -788,7 +812,6 @@ export default function App() {
           <ReadyTile />
         </motion.div>
 
-        {/* Gradient grid */}
         <motion.div
           variants={{
             hidden: { opacity: 0, y: 18 },
@@ -837,11 +860,7 @@ export default function App() {
           }
         }
         @media (max-width: 360px) {
-          .logoMark-mobile {
-            left: 0.4rem;
-            bottom: 0.4rem;
-            font-size: clamp(20px, 12vw, 38px);
-          }
+          .logoMark-mobile { left: 0.4rem; bottom: 0.4rem; font-size: clamp(20px, 12vw, 38px); }
         }
       `}</style>
     </div>
@@ -852,10 +871,7 @@ export default function App() {
       <div className="relative max-w-[1600px] mx-auto w-full">
         <div className="grid grid-cols-2 grid-rows-2 min-h-[70svh] md:min-h-[80svh]">
           {[
-            {
-              title: "COMPLETE\nWEBSITE",
-              sub: "MOODBOARD / WIREFRAMING / CONCEPTS IN ANIMATION / DESIGN / DEVELOPMENT",
-            },
+            { title: "COMPLETE\nWEBSITE", sub: "MOODBOARD / WIREFRAMING / CONCEPTS IN ANIMATION / DESIGN / DEVELOPMENT" },
             { title: "UI\nDESIGN", sub: "MOODBOARD / DESIGN CONCEPTS / ANIMATION / WEBDESIGN" },
             { title: "UX\nDESIGN", sub: "WIREFRAMING / UX RESEARCH / WEBSITE AUDIT", accent: true },
             { title: "WEB\nDEVELOPMENT", sub: "DEVELOPMENT / WEBFLOW / E-COMMERCE" },
@@ -916,7 +932,6 @@ export default function App() {
 
       <div className="relative px-4 md:px-8 w-full">
         <div className="max-w-[1600px] mx-auto">
-          {/* Header */}
           <div className="text-center pt-16 md:pt-24 mb-16 md:mb-20">
             <motion.h2
               initial={{ opacity: 0, y: 28 }}
@@ -947,7 +962,6 @@ export default function App() {
             </motion.p>
           </div>
 
-          {/* Cards */}
           <div className="grid grid-cols-12 gap-4 items-stretch">
             <div className="col-span-12 lg:col-span-4">
               <Tile className="p-8 md:p-12 h-full flex flex-col justify-between">
@@ -985,7 +999,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Quote */}
           <div className="text-center mt-16 md:mt-24 mb-16 md:mb-24">
             <motion.blockquote
               initial={{ opacity: 0, y: 28 }}
@@ -1020,30 +1033,22 @@ export default function App() {
   );
 
   return (
-    <div style={{ background: palette.bg, color: palette.ink }} className="relative min-h-[100svh]">
-      {/* фикс-UI через портал — всегда поверх сцен */}
+    <div style={{ background: palette.bg, color: palette.ink }} className="relative min-h-[100dvh]">
+      {/* фикс-UI через портал */}
       <Portal><Navigation /></Portal>
 
       <SceneStack ids={["home", "services", "about", "contact"]}>
         {[Hero, Services, WhatWeDo, <FooterQuad key="f" />] as any}
       </SceneStack>
 
-      {/* Fixed “PROCESS” button поверх всего */}
+      {/* FIXED “PROCESS” button */}
       <Portal><AwardsButton /></Portal>
 
-      {/* Глобальные стили и безопасный отступ у Hero под кнопку Menu */}
+      {/* базовые хелперы */}
       <style>{`
         html, body, #root { background: ${palette.bg}; height: 100%; }
         body { overscroll-behavior-y: none; }
         * { -webkit-tap-highlight-color: transparent; }
-
-        /* Чтобы на старте контент не попадал под фикс-кнопку Menu */
-        .hero-safe {
-          padding-top: calc(env(safe-area-inset-top) + 72px);
-        }
-        @media (min-width: 768px) {
-          .hero-safe { padding-top: 32px; }
-        }
       `}</style>
     </div>
   );
