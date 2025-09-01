@@ -1,0 +1,24 @@
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+/* === mobile overflow fixes === */
+html, body {
+  width: 100%;
+  overflow-x: clip; /* убирает горизонтальный скролл */
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+img, video, canvas, svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* --- Tailwind layers --- */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
