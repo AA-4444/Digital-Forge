@@ -227,18 +227,16 @@ const Navigation = () => {
 /* ---------- Scene Stack (как в рабочем варианте) ---------- */
 
 
-
 export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
   ids,
   children,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Реальная высота в пикселях (учитывает скрытие адресной строки на iOS)
+  // Стабильная высота экрана (iOS адресная строка)
   const [vhPx, setVhPx] = useState<number>(0);
   useEffect(() => {
-    const get = () =>
-      (window.visualViewport?.height ?? window.innerHeight) | 0; // целое, без дрожи дробей
+    const get = () => Math.round(window.visualViewport?.height ?? window.innerHeight);
     const recalc = () => setVhPx(get());
     recalc();
     window.addEventListener("resize", recalc, { passive: true });
@@ -249,7 +247,6 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
     };
   }, []);
 
-  // Если ещё не знаем vh — рендерим без эффекта, чтобы не дёргать лэйаут
   if (!vhPx) {
     return (
       <div id="stackRoot" ref={containerRef}>
@@ -262,13 +259,10 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
     );
   }
 
-  // Скролл по общему контейнеру
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start start", "end end"],
   });
-
-  // Сглаживаем, чтобы сцены не моргали на iOS
   const p = useSpring(scrollYProgress, { stiffness: 160, damping: 42, mass: 0.6 });
 
   const count = children.length;
@@ -279,9 +273,9 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
       ref={containerRef}
       className="relative"
       style={{
-        /* Общая высота = N экранов минус 1px для гарантии, чтобы снизу не появлялась белая линия */
-        height: `${count * vhPx - 1}px`,
-        background: "#E8E4E2", // совпадает с твоим palette.bg
+        // Ровно N экранов + 1px снизу как буфер (не срезает макушку)
+        height: `${count * vhPx + 1}px`,
+        background: "#E8E4E2",
         overflow: "visible",
         WebkitBackfaceVisibility: "hidden",
         backfaceVisibility: "hidden",
@@ -289,8 +283,6 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
     >
       {children.map((child, i) => {
         const isLast = i === count - 1;
-
-        // Позиции для кроссфейда
         const start = i / count;
         const end = (i + 1) / count;
         const fade = 0.22;
@@ -302,16 +294,13 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           : useTransform(p, [start, start + fade, end - fade, end], [0, 1, 1, 0]);
 
         if (isLast) {
-          // Последняя секция НЕ sticky и без абсолютов — нормальный поток, без «подпрыгиваний»
+          // Финальная секция — обычная, без sticky
           return (
             <section
               key={ids[i]}
               id={ids[i]}
               className="relative"
-              style={{
-                minHeight: vhPx,
-                zIndex: 1,
-              }}
+              style={{ minHeight: vhPx, zIndex: 1, background: "inherit" }}
             >
               <motion.div
                 style={{
@@ -327,7 +316,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           );
         }
 
-        // Промежуточные секции — sticky, без absolute overlay (меньше артефактов и «пэддингов»)
+        // Промежуточные — sticky без отрицательных отступов
         return (
           <section
             key={ids[i]}
@@ -336,8 +325,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
             style={{
               height: vhPx,
               zIndex: count - i,
-              // Чуть перекрываемся вверх на полпикселя, чтобы не было видимого шва между sticky-блоками
-              marginTop: i > 0 ? -0.5 : 0,
+              background: "inherit",
               WebkitBackfaceVisibility: "hidden",
               backfaceVisibility: "hidden",
             }}
@@ -357,6 +345,9 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           </section>
         );
       })}
+
+      {/* 1px-спейсер в самом низу, чтобы закрыть возможный «волосок» без сдвига секций */}
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 1, background: "inherit" }} />
     </div>
   );
 };
