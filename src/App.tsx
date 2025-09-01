@@ -257,14 +257,18 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
   useEffect(() => {
     const updateHeight = () => {
       if (containerRef.current) {
-        const totalH = children.length * 100;
-        const vh = window.innerHeight * 0.01;
-        containerRef.current.style.height = `calc(${totalH} * ${vh}px)`;
+        const vh = window.visualViewport?.height ?? window.innerHeight;
+        const totalH = children.length * vh;
+        containerRef.current.style.height = `${totalH}px`;
       }
     };
     updateHeight();
     window.addEventListener('resize', updateHeight, { passive: true });
-    return () => window.removeEventListener('resize', updateHeight);
+    window.visualViewport?.addEventListener?.('resize', updateHeight, { passive: true });
+    return () => {
+      window.removeEventListener('resize', updateHeight);
+      window.visualViewport?.removeEventListener?.('resize', updateHeight);
+    };
   }, [children.length]);
 
   const { scrollYProgress } = useScroll({
@@ -274,7 +278,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
 
   const smooth = useSpring(scrollYProgress, {
     stiffness: 160,
-    damping: 42,
+    damping: 48, // Увеличено для более плавной прокрутки
     mass: 0.6,
   });
 
@@ -285,7 +289,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
       id="stackRoot"
       ref={containerRef}
       className="relative"
-      style={{ background: palette.bg }}
+      style={{ background: palette.bg, overflow: "hidden" }}
     >
       {children.map((child, i) => {
         const start = i / count;
@@ -321,7 +325,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
               key={ids[i]}
               id={ids[i]}
               className="relative min-h-[100dvh] flex items-stretch"
-              style={{ zIndex: z }}
+              style={{ zIndex: z, background: palette.dark }}
             >
               <motion.div
                 style={{
@@ -329,6 +333,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
                   y,
                   willChange: "opacity, transform",
                   WebkitBackfaceVisibility: "hidden",
+                  backfaceVisibility: "hidden",
                 }}
                 className="w-full"
               >
@@ -343,7 +348,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
             key={ids[i]}
             id={ids[i]}
             className="sticky top-0 h-[100dvh] flex items-center"
-            style={{ zIndex: z }}
+            style={{ zIndex: z, background: palette.bg }}
           >
             <motion.div
               style={{
@@ -351,6 +356,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
                 y,
                 willChange: "opacity, transform",
                 WebkitBackfaceVisibility: "hidden",
+                backfaceVisibility: "hidden",
               }}
               className="w-full h-full flex items-center"
             >
@@ -481,7 +487,7 @@ export const FooterQuad = () => {
     <section
       id="contact"
       className="relative min-h-[100dvh] flex items-stretch overflow-hidden"
-      style={{ background: palette.dark, color: "#FFF" }}
+      style={{ background: palette.dark, color: "#FFF", paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="absolute inset-0 pointer-events-none select-none overflow-hidden opacity-5">
         <div className="absolute left-0 w-full h-full top-[8vh] sm:top-0">
@@ -503,7 +509,7 @@ export const FooterQuad = () => {
         </div>
       </div>
 
-      <div className="relative max-w-[1400px] mx-auto w-full px-4 sm:px-6 md:px-10 sm:py-14 md:py-16 flex flex-col justify-between mt-[10vh] sm:mt-0 py-8">
+      <div className="relative max-w-[1400px] mx-auto w-full px-4 sm:px-6 md:px-10 sm:py-14 md:py-16 flex flex-col justify-between min-h-[100dvh]">
         <div className="text-center mb-8 sm:mb-14 md:mb-16">
           <motion.h2
             {...reveal(0.1)}
@@ -560,16 +566,7 @@ export const FooterQuad = () => {
             ))}
           </nav>
         </motion.div>
-
-        <div className="pb-[env(safe-area-inset-bottom)]" />
       </div>
-
-      <style>{`
-        @keyframes scroll-horizontal {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-25%); }
-        }
-      `}</style>
     </section>
   );
 };
@@ -718,6 +715,28 @@ const AwardsButton: React.FC = () => {
 export default function App() {
   useEffect(() => {
     document.documentElement.style.scrollBehavior = "smooth";
+
+    // Динамическое обновление theme-color
+    const updateThemeColor = () => {
+      const scrollY = window.scrollY || window.pageYOffset;
+      const vh = window.visualViewport?.height ?? window.innerHeight;
+      const footer = document.getElementById("contact");
+      if (!footer) return;
+
+      const footerTop = footer.getBoundingClientRect().top + scrollY;
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) {
+        meta.setAttribute("content", scrollY >= footerTop - vh / 2 ? palette.dark : palette.bg);
+      }
+    };
+
+    updateThemeColor();
+    window.addEventListener("scroll", updateThemeColor, { passive: true });
+    window.visualViewport?.addEventListener?.("resize", updateThemeColor, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", updateThemeColor);
+      window.visualViewport?.removeEventListener?.("resize", updateThemeColor);
+    };
   }, []);
 
   const Hero = (
@@ -883,7 +902,7 @@ export default function App() {
   );
 
   const WhatWeDo = (
-    <section id="about" className="relative overflow-x-hidden" style={{ color: palette.ink }}>
+    <section id="about" className="relative overflow-x-hidden" style={{ color: palette.ink, background: palette.bg }}>
       <div className="absolute inset-0 pointer-events-none select-none opacity-5">
         <div className="absolute top-1/2 left-0 w-full -translate-y-1/2">
           <div
@@ -1012,12 +1031,14 @@ export default function App() {
       <Portal><AwardsButton /></Portal>
       <style>{`
         html, body, #root {
-          background: ${palette.bg};
+          background: ${palette.bg} !important;
           height: 100%;
           min-height: -webkit-fill-available;
+          overscroll-behavior: none;
         }
         body {
           overscroll-behavior-y: none;
+          margin: 0;
         }
         * {
           -webkit-tap-highlight-color: transparent;
