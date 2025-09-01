@@ -10,7 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 
-/* ---------- Palette ---------- */
+// ---------- Palette ----------
 const palette = {
   bg: "#E8E4E2",
   ink: "#161616",
@@ -20,7 +20,7 @@ const palette = {
   dark: "#161616",
 };
 
-/* ---------- Portal ---------- */
+// ---------- Small Portal wrapper for truly fixed UI ----------
 const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -28,7 +28,7 @@ const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return createPortal(children, document.body);
 };
 
-/* ---------- Navigation ---------- */
+// ---------- Navigation ----------
 type InternalItem = {
   type: "section";
   text: string;
@@ -55,7 +55,7 @@ const Navigation = () => {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
-    window.addEventListener("keydown", onKey, { passive: true });
+    window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
@@ -67,12 +67,15 @@ const Navigation = () => {
       setDims({ w, h });
     };
     calc();
-    window.addEventListener("resize", calc, { passive: true });
+    window.addEventListener("resize", calc);
     return () => window.removeEventListener("resize", calc);
   }, []);
 
+ 
+
   const scrollToSection = (id: InternalItem["sectionId"]) => {
     close();
+
     setTimeout(() => {
       const sectionOrder: InternalItem["sectionId"][] = ["home", "services", "about", "contact"];
       const idx = sectionOrder.indexOf(id);
@@ -87,7 +90,7 @@ const Navigation = () => {
       const rootTop = (window.scrollY || window.pageYOffset) + root.getBoundingClientRect().top;
       const vh = window.visualViewport?.height ?? window.innerHeight;
 
-      let target = Math.round(rootTop + idx * vh);
+      let target = Math.round(rootTop + idx * vh) + 2;
       const max = Math.max(0, document.documentElement.scrollHeight - vh);
       target = Math.min(Math.max(target, 0), max);
 
@@ -96,13 +99,12 @@ const Navigation = () => {
       try {
         history.replaceState(null, "", `#${id}`);
       } catch {}
-    }, 60);
+    }, 80);
   };
 
   return (
     <>
-      {/* [FIX] слегка отодвинул кнопку от контента на мобилке, чтобы визуально не «налезала» на карточку заголовка */}
-      <div className="fixed z-[60]" style={{ top: "max(1rem, env(safe-area-inset-top))", left: "1.5rem" }}>
+      <div className="fixed top-6 left-6 z-40">
         <button
           ref={btnRef}
           onPointerUp={toggle}
@@ -129,10 +131,12 @@ const Navigation = () => {
             id="nav-panel"
             role="dialog"
             aria-modal="true"
-            className="fixed z-[70]"
+            className="fixed z-50"
             style={{
-              top: "max(1.5rem, calc(env(safe-area-inset-top) + 0.5rem))",
-              left: "1.5rem",
+              top: 24,
+              left: 24,
+              WebkitBackfaceVisibility: "hidden",
+              backfaceVisibility: "hidden",
               WebkitTapHighlightColor: "transparent",
             }}
             initial={{ width: 56, height: 48, borderRadius: 9999, opacity: 0.98 }}
@@ -144,7 +148,10 @@ const Navigation = () => {
               className="relative shadow-xl rounded-3xl overflow-hidden h-full w-full"
               style={{ background: palette.blue, color: "#fff" }}
             >
-              <div className="px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+              <div
+                className="px-5 py-4"
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
+              >
                 <div className="flex justify-between items-center">
                   <span className="uppercase text-[11px] tracking-[0.4em] leading-none">close</span>
                   <button
@@ -212,37 +219,7 @@ const Navigation = () => {
   );
 };
 
-/* ---------- Helpers for iOS ---------- */
-const isIOS = () => {
-  if (typeof navigator === "undefined") return false;
-  const ua = navigator.userAgent || navigator.vendor || (window as any).opera || "";
-  const iOS =
-    /iPad|iPhone|iPod/.test(ua) ||
-    (ua.includes("Mac") && "ontouchend" in document);
-  return iOS;
-};
-
-const setVHUnit = () => {
-  const vh = window.visualViewport?.height ?? window.innerHeight;
-  document.documentElement.style.setProperty("--vh", `${vh * 0.01}px`);
-};
-
-/* ---------- Reduced motion policy (overridden on iOS) ---------- */
-const useRespectReducedMotion = () => {
-  const sysPrefers = useReducedMotion();
-  const [forceOn, setForceOn] = React.useState(false);
-  const [respect, setRespect] = React.useState(false);
-
-  React.useEffect(() => {
-    setForceOn(localStorage.getItem("forceAnimations") === "1");
-    setRespect(localStorage.getItem("respectReducedMotion") === "1");
-  }, []);
-
-  if (isIOS() && !respect) return false;
-  return sysPrefers && !forceOn;
-};
-
-/* ---------- Scene Stack (smooth sticky crossfade) ---------- */
+// ---------- Scene Stack (smooth sticky crossfade, stabilized) ----------
 const useIsMobile = () => {
   const [m, setM] = React.useState(false);
   React.useEffect(() => {
@@ -255,6 +232,35 @@ const useIsMobile = () => {
   return m;
 };
 
+const useRespectReducedMotion = () => {
+  const sysPrefers = useReducedMotion();
+  const [force, setForce] = React.useState(false);
+
+  React.useEffect(() => {
+    setForce(typeof window !== "undefined" && localStorage.getItem("forceAnimations") === "1");
+  }, []);
+
+  return sysPrefers && !force;
+};
+ const isIOS = () => {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const isiDevice = /iPad|iPhone|iPod/.test(ua);
+  const isTouchMac = /Macintosh/.test(ua) && (navigator as any).maxTouchPoints > 1;
+  return isiDevice || isTouchMac;
+};
+const GlobalBgFix = () => (
+  <style>{`
+    html, body, #root { height: 100%; background: ${palette.bg}; }
+    body { overscroll-behavior-y: none; }
+    body::before {
+      content: ""; position: fixed; inset: 0; background: ${palette.bg};
+      z-index: -1; pointer-events: none;
+    }
+    * { -webkit-tap-highlight-color: transparent; }
+  `}</style>
+);
+
 export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
   ids,
   children,
@@ -262,24 +268,13 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
   const prefersReduced = useRespectReducedMotion();
   const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement | null>(null);
-
-  // [FIX] корректный vh + фиксация resize/zoom
-  useEffect(() => {
-    setVHUnit();
-    const onRes = () => setVHUnit();
-    window.addEventListener("resize", onRes, { passive: true });
-    window.visualViewport?.addEventListener?.("resize", onRes);
-    return () => {
-      window.removeEventListener("resize", onRes);
-      window.visualViewport?.removeEventListener?.("resize", onRes as any);
-    };
-  }, []);
+  const onIOS = useMemo(() => isIOS(), []);
 
   if (prefersReduced) {
     return (
       <div ref={containerRef}>
         {children.map((child, i) => (
-          <section key={ids[i]} id={ids[i]} className="min-h-[100vh] flex items-center" style={{ background: palette.bg }}>
+          <section key={ids[i]} id={ids[i]} className="min-h-[100vh] flex items-center">
             <div className="w-full">{child}</div>
           </section>
         ))}
@@ -287,35 +282,61 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
     );
   }
 
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ["start start", "end end"],
-  });
+  // 1) Источники скролла
+  const global = useScroll(); // { scrollY, scrollYProgress }
+  const target = useScroll({ target: containerRef, offset: ["start start", "end end"] });
 
-  const smooth = useSpring(scrollYProgress, {
-    stiffness: 160,
-    damping: 42,
-    mass: 0.6,
-  });
+  // 2) Границы контейнера для нормализации глобального скролла
+  const boundsRef = useRef({ start: 0, end: 1, vh: 0 });
+  useEffect(() => {
+    const recalc = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const sc = window.scrollY || window.pageYOffset;
+      const start = Math.round(sc + r.top);
+      const bottom = Math.round(sc + r.bottom);
+      const vh = window.visualViewport?.height ?? window.innerHeight;
+      // end — это момент, когда низ контейнера сравнялся с низом вьюпорта
+      const end = Math.max(start + 1, bottom - vh);
+      boundsRef.current = { start, end, vh };
+    };
+    recalc();
+    const ro = new ResizeObserver(recalc);
+    if (containerRef.current) ro.observe(containerRef.current);
+    window.addEventListener("resize", recalc);
+    window.addEventListener("orientationchange", recalc);
+    const t = setTimeout(recalc, 50);
+    return () => {
+      clearTimeout(t);
+      ro.disconnect();
+      window.removeEventListener("resize", recalc);
+      window.removeEventListener("orientationchange", recalc);
+    };
+  }, []);
+
+  // 3) На iOS → нормализуем от window.scrollY, иначе — обычный target.scrollYProgress
+  const rawProgress = onIOS
+    ? useTransform(global.scrollY, (y) => {
+        const { start, end } = boundsRef.current;
+        const p = (y - start) / (end - start);
+        return Math.min(1, Math.max(0, p));
+      })
+    : target.scrollYProgress;
+
+  // 4) Сглаживание
+  const smooth = useSpring(rawProgress, { stiffness: 160, damping: 42, mass: 0.6 });
 
   const count = children.length;
-  const totalH = (count - 1) * 100 + 100;
+  // Чуть больше 100%, чтобы не ловить артефакт на самом низу
+  const totalH = (count - 1) * 100 + 100 + 0.2;
 
   return (
     <div
       id="stackRoot"
       ref={containerRef}
       className="relative"
-      // [FIX] убрал +1px и -mt-px; уравнял фон секций — пропадает «полоска»
-      style={{
-        height: `calc(${totalH} * var(--vh, 1vh))`,
-        background: palette.bg,
-        transform: "none",
-        WebkitTransform: "none",
-        overflow: "visible",
-        // [FIX] изоляция слоёв, чтобы fixed-элементы поверх не мерцали/не пропадали
-        isolation: "isolate",
-      }}
+      style={{ height: `calc(${totalH} * 1svh + 1px)` }}
     >
       {children.map((child, i) => {
         const start = i / count;
@@ -350,12 +371,8 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
             <section
               key={ids[i]}
               id={ids[i]}
-              className="relative flex items-stretch"
-              style={{
-                minHeight: "100dvh",
-                zIndex: z,
-                background: palette.bg, // [FIX] тот же фон, чтобы не было просветов
-              }}
+              className="relative min-h-[calc(100svh+2px)] flex items-stretch"
+              style={{ zIndex: z }}
             >
               <motion.div
                 style={{
@@ -377,13 +394,8 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           <section
             key={ids[i]}
             id={ids[i]}
-            className="sticky top-0 h-[100dvh] flex items-center"
-            style={{
-              zIndex: z,
-              background: palette.bg, // [FIX] одинаковый фон
-              backfaceVisibility: "hidden",
-              WebkitBackfaceVisibility: "hidden",
-            }}
+            className="sticky top-0 h-[100svh] flex items-center -mt-px"
+            style={{ zIndex: z }}
           >
             <motion.div
               style={{
@@ -400,11 +412,12 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           </section>
         );
       })}
+      <div style={{ height: 2 }} />
     </div>
   );
 };
 
-/* ---------- Reusable tiles ---------- */
+// ---------- Reusable tiles ----------
 const Tile = ({ children, className = "", onClick }: any) => (
   <motion.div
     whileHover={{ y: -3 }}
@@ -416,7 +429,7 @@ const Tile = ({ children, className = "", onClick }: any) => (
   </motion.div>
 );
 
-/* ====== ReadyTile ====== */
+// ====== ReadyTile ======
 const ReadyTile = () => (
   <Tile className="h-full p-6 md:p-8 flex flex-col justify-between min-h-0">
     <div className="space-y-2">
@@ -455,9 +468,10 @@ const gradient = (i: number) =>
     30 + ((i + 2) % 5) * 12
   }%, rgba(10,60,194,0.2), transparent 60%), linear-gradient(135deg, #ffffff, #f6f7fb)`;
 
-/* ---------- Footer ---------- */
+// ---------- Footer ----------
 const CTAButton: React.FC = () => {
   const [active, setActive] = React.useState(false);
+
   return (
     <motion.a
       href="#contact"
@@ -493,6 +507,7 @@ const CTAButton: React.FC = () => {
         >
           Start Project
         </motion.span>
+
         <motion.span
           className="absolute inset-0 z-10 pointer-events-none"
           style={{ background: "#FFFFFF" }}
@@ -500,6 +515,7 @@ const CTAButton: React.FC = () => {
           transition={{ duration: 0.35, ease: "easeOut" }}
         />
       </motion.div>
+
       <motion.span
         className="absolute inset-0 -z-10"
         style={{ background: "#FFFFFF" }}
@@ -512,16 +528,18 @@ const CTAButton: React.FC = () => {
 
 export const FooterQuad = () => {
   const services = ["Complete Website", "UI/UX Design", "iOS Development", "Web Development"];
+
   const reveal = (delay = 0) => ({
     initial: { opacity: 0, y: 24 },
     whileInView: { opacity: 1, y: 0 },
     viewport: { once: true, amount: 0.2, margin: "0px 0px -8% 0px" },
     transition: { duration: 0.7, ease: "easeOut" as const, delay },
   });
+
   return (
     <section
       id="contact"
-      className="relative min-h-[100dvh] flex items-stretch overflow-hidden"
+      className="relative min-h-[100svh] flex items-stretch overflow-hidden"
       style={{ background: "#1E1E1E", color: "#FFF" }}
     >
       {/* Background marquee */}
@@ -546,7 +564,8 @@ export const FooterQuad = () => {
       </div>
 
       {/* Content */}
-      <div className="relative max-w={[1400] + 'px'} mx-auto w-full px-4 sm:px-6 md:px-10 sm:py-14 md:py-16 flex flex-col justify-between mt-[10vh] sm:mt-0 py-8">
+      <div className="relative max-w-[1400px] mx-auto w-full px-4 sm:px-6 md:px-10 sm:py-14 md:py-16 flex flex-col justify-between mt-[10vh] sm:mt-0 py-8">
+        {/* CTA */}
         <div className="text-center mb-8 sm:mb-14 md:mb-16">
           <motion.h2
             {...reveal(0.1)}
@@ -619,7 +638,7 @@ export const FooterQuad = () => {
   );
 };
 
-/* ---------- AwardsButton ---------- */
+// ---------- AwardsButton ----------
 const useIsTouch = () => {
   const [isTouch, setIsTouch] = useState(false);
   useEffect(() => {
@@ -668,15 +687,10 @@ const AwardsButton: React.FC = () => {
   ];
 
   return (
-    // [FIX] поднял z-index и изолировал слой, чтобы фикс-кнопка не «терялась»
     <div
       ref={rootRef}
-      className="fixed z-[65]"
-      style={{
-        right: "1.5rem",
-        bottom: "calc(1.25rem + env(safe-area-inset-bottom))",
-        isolation: "isolate",
-      }}
+      className="fixed right-4 sm:right-6 z-40"
+      style={{ bottom: `calc(1.25rem + env(safe-area-inset-bottom))` }}
     >
       <button
         type="button"
@@ -700,6 +714,7 @@ const AwardsButton: React.FC = () => {
         className="group relative outline-none"
         style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
       >
+        {/* main circle */}
         <div
           className="
             relative z-10 w-16 h-16 rounded-full
@@ -716,6 +731,7 @@ const AwardsButton: React.FC = () => {
           <div className="absolute inset-0 bg-white transform scale-0 group-hover:scale-100 transition-transform duration-300 rounded-full mix-blend-screen" />
         </div>
 
+        {/* expanding list */}
         <div
           id="process-list"
           className={`absolute bottom-20 right-0 space-y-2 transition-all duration-500 ${
@@ -740,6 +756,7 @@ const AwardsButton: React.FC = () => {
           ))}
         </div>
 
+        {/* particles */}
         <div className="absolute inset-0 pointer-events-none">
           {dots.map((pos, i) => (
             <div
@@ -766,26 +783,14 @@ const AwardsButton: React.FC = () => {
   );
 };
 
-/* ---------- App ---------- */
+
+// ---------- App ----------
 export default function App() {
   useEffect(() => {
-    // системный smooth
     document.documentElement.style.scrollBehavior = "smooth";
-
-    // корректный --vh
-    setVHUnit();
-    const onRes = () => setVHUnit();
-    window.addEventListener("resize", onRes, { passive: true });
-    window.visualViewport?.addEventListener?.("resize", onRes);
-
     const sceneIds = ["home", "services", "about", "contact"];
     const sceneCount = 4;
     console.assert(sceneIds.length === sceneCount, "[SmokeTest] sceneIds length mismatch");
-
-    return () => {
-      window.removeEventListener("resize", onRes);
-      window.visualViewport?.removeEventListener?.("resize", onRes as any);
-    };
   }, []);
 
   const Hero = (
@@ -802,6 +807,7 @@ export default function App() {
         }}
         className="grid grid-cols-12 md:grid-rows-2 gap-3 md:gap-5 max-w-[1600px] mx-auto md:h-[78vh]"
       >
+        {/* Title */}
         <Tile className="col-span-12 md:col-span-8 md:row-span-1 aspect-[2/1] md:aspect-auto md:h-full p-6 md:p-10 flex items-end">
           <motion.h1
             variants={{
@@ -814,6 +820,7 @@ export default function App() {
           </motion.h1>
         </Tile>
 
+        {/* Blue tile */}
         <motion.div
           variants={{
             hidden: { opacity: 0, y: 18 },
@@ -834,6 +841,7 @@ export default function App() {
           </Tile>
         </motion.div>
 
+        {/* Ready */}
         <motion.div
           variants={{
             hidden: { opacity: 0, y: 18 },
@@ -844,6 +852,7 @@ export default function App() {
           <ReadyTile />
         </motion.div>
 
+        {/* Gradient grid */}
         <motion.div
           variants={{
             hidden: { opacity: 0, y: 18 },
@@ -971,6 +980,7 @@ export default function App() {
 
       <div className="relative px-4 md:px-8 w-full">
         <div className="max-w-[1600px] mx-auto">
+          {/* Header */}
           <div className="text-center pt-16 md:pt-24 mb-16 md:mb-20">
             <motion.h2
               initial={{ opacity: 0, y: 28 }}
@@ -1001,6 +1011,7 @@ export default function App() {
             </motion.p>
           </div>
 
+          {/* Cards */}
           <div className="grid grid-cols-12 gap-4 items-stretch">
             <div className="col-span-12 lg:col-span-4">
               <Tile className="p-8 md:p-12 h-full flex flex-col justify-between">
@@ -1038,6 +1049,7 @@ export default function App() {
             </div>
           </div>
 
+          {/* Quote */}
           <div className="text-center mt-16 md:mt-24 mb-16 md:mb-24">
             <motion.blockquote
               initial={{ opacity: 0, y: 28 }}
@@ -1072,9 +1084,9 @@ export default function App() {
   );
 
   return (
-    <div style={{ background: palette.bg, color: palette.ink }} className="relative min-h-[100dvh]">
-      {/* фикс-UI через портал */}
-      <Portal><Navigation /></Portal>
+    <div style={{ background: palette.bg, color: palette.ink }} className="relative min-h-[100svh]">
+      {/* Render fixed UI via portal to avoid iOS fixed-position glitches */}
+      <Portal><Navigation /></Portal><GlobalBgFix />
 
       <SceneStack ids={["home", "services", "about", "contact"]}>
         {[Hero, Services, WhatWeDo, <FooterQuad key="f" />] as any}
@@ -1083,13 +1095,11 @@ export default function App() {
       {/* Fixed “PROCESS” button */}
       <Portal><AwardsButton /></Portal>
 
-      {/* iOS/Safari helpers */}
+      {/* iOS/safari helpers */}
       <style>{`
         html, body, #root { background: ${palette.bg}; height: 100%; }
         body { overscroll-behavior-y: none; }
         * { -webkit-tap-highlight-color: transparent; }
-        /* [FIX] отключаем нежелательные стек-контексты у всего документа */
-        html, body { transform: none !important; }
       `}</style>
     </div>
   );
