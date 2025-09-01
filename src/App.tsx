@@ -277,9 +277,9 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
   });
 
   const smooth = useSpring(scrollYProgress, {
-    stiffness: 160,
-    damping: 48, // Увеличено для более плавной прокрутки
-    mass: 0.6,
+    stiffness: 180, // Увеличено для большей плавности
+    damping: 60,   // Увеличено для снижения дёргания
+    mass: 0.8,
   });
 
   const count = children.length;
@@ -289,17 +289,17 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
       id="stackRoot"
       ref={containerRef}
       className="relative"
-      style={{ background: palette.bg, overflow: "hidden" }}
+      style={{ background: palette.bg, overflow: "hidden", contain: "strict" }}
     >
       {children.map((child, i) => {
         const start = i / count;
         const end = (i + 1) / count;
         const isLast = i === count - 1;
 
-        const baseIn = isMobile ? 0.1 : 0.12;
-        const baseOut = isMobile ? 0.1 : 0.12;
-        const heroIn = isMobile ? 0.16 : 0.2;
-        const heroOut = isMobile ? 0.16 : 0.2;
+        const baseIn = isMobile ? 0.08 : 0.1;
+        const baseOut = isMobile ? 0.08 : 0.1;
+        const heroIn = isMobile ? 0.12 : 0.15;
+        const heroOut = isMobile ? 0.12 : 0.15;
 
         const fadeIn = i === 0 ? heroIn : baseIn;
         const fadeOut = i === 0 ? heroOut : baseOut;
@@ -311,7 +311,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
             ? useTransform(smooth, [start, Math.min(end, start + fadeIn), 1], [0, 1, 1])
             : useTransform(smooth, [start, start + fadeIn, end - fadeOut, end], [0, 1, 1, 0]);
 
-        const delta = isIOS ? 0 : (isMobile ? 6 : 10);
+        const delta = isIOS ? 0 : (isMobile ? 4 : 8); // Уменьшено для снижения дёргания
         const y =
           i === 0
             ? useTransform(smooth, [start, end], [0, -delta])
@@ -324,7 +324,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
             <section
               key={ids[i]}
               id={ids[i]}
-              className="relative min-h-[100dvh] flex items-stretch"
+              className="relative min-h-[100dvh] flex items-stretch will-change-transform"
               style={{ zIndex: z, background: palette.dark }}
             >
               <motion.div
@@ -347,7 +347,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           <section
             key={ids[i]}
             id={ids[i]}
-            className="sticky top-0 h-[100dvh] flex items-center"
+            className="sticky top-0 h-[100dvh] flex items-center will-change-transform"
             style={{ zIndex: z, background: palette.bg }}
           >
             <motion.div
@@ -486,10 +486,15 @@ export const FooterQuad = () => {
   return (
     <section
       id="contact"
-      className="relative min-h-[100dvh] flex items-stretch overflow-hidden"
-      style={{ background: palette.dark, color: "#FFF", paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="relative min-h-[100dvh] flex items-stretch"
+      style={{ 
+        background: palette.dark, 
+        color: "#FFF", 
+        paddingBottom: "env(safe-area-inset-bottom)",
+        contain: "paint" // Оптимизация рендеринга
+      }}
     >
-      <div className="absolute inset-0 pointer-events-none select-none overflow-hidden opacity-5">
+      <div className="absolute inset-0 pointer-events-none select-none opacity-5 z-0">
         <div className="absolute left-0 w-full h-full top-[8vh] sm:top-0">
           <div
             className="flex space-x-8"
@@ -509,12 +514,12 @@ export const FooterQuad = () => {
         </div>
       </div>
 
-      <div className="relative max-w-[1400px] mx-auto w-full px-4 sm:px-6 md:px-10 sm:py-14 md:py-16 flex flex-col justify-between min-h-[100dvh]">
-        <div className="text-center mb-8 sm:mb-14 md:mb-16">
+      <div className="relative max-w-[1400px] mx-auto w-full px-4 sm:px-6 md:px-10 py-8 sm:py-12 md:py-14 flex flex-col gap-8 sm:gap-12 min-h-[100dvh]">
+        <div className="text-center">
           <motion.h2
             {...reveal(0.1)}
             className="font-black leading-[0.9] mb-5 sm:mb-8 md:mb-10"
-            style={{ fontSize: "clamp(3rem, 12vw, 9rem)" }}
+            style={{ fontSize: "clamp(2.5rem, 10vw, 7rem)" }} // Уменьшен размер для лучшей читаемости
           >
             <span className="block">Ready to work</span>
             <span className="block" style={{ color: palette.blue }}>
@@ -527,8 +532,8 @@ export const FooterQuad = () => {
           </motion.div>
         </div>
 
-        <motion.div {...reveal(0.3)} className="text-center mb-6 sm:mb-12 md:mb-14">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 md:gap-8 text-[10px] sm:text-xs font-medium tracking-[0.25em] sm:tracking-[0.3em] uppercase">
+        <motion.div {...reveal(0.3)} className="text-center">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6 text-[10px] sm:text-xs font-medium tracking-[0.25em] sm:tracking-[0.3em] uppercase">
             {services.map((service, index) => (
               <motion.div
                 key={service}
@@ -903,7 +908,7 @@ export default function App() {
 
   const WhatWeDo = (
     <section id="about" className="relative overflow-x-hidden" style={{ color: palette.ink, background: palette.bg }}>
-      <div className="absolute inset-0 pointer-events-none select-none opacity-5">
+      <div className="absolute inset-0 pointer-events-none select-none opacity-5 z-0">
         <div className="absolute top-1/2 left-0 w-full -translate-y-1/2">
           <div
             className="flex space-x-16"
@@ -921,14 +926,14 @@ export default function App() {
       </div>
 
       <div className="relative px-4 md:px-8 w-full">
-        <div className="max-w-[1600px] mx-auto">
-          <div className="text-center pt-16 md:pt-24 mb-16 md:mb-20">
+        <div className="max-w-[1400px] mx-auto">
+          <div className="text-center pt-12 md:pt-16 mb-12 md:mb-16 min-h-[40vh]">
             <motion.h2
               initial={{ opacity: 0, y: 28 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-              transition={{ duration: 0.9, ease: "easeOut", delay: 0.1 }}
-              className="text-[clamp(2rem,8vw,8rem)] font-black leading-[0.8] mb-10"
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.7, ease: "easeOut", delay: 0.1 }}
+              className="text-[clamp(2rem,8vw,7rem)] font-black leading-[0.9] mb-8"
             >
               What I do
             </motion.h2>
@@ -936,17 +941,17 @@ export default function App() {
             <motion.div
               initial={{ opacity: 0, y: 28 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-              transition={{ duration: 0.9, ease: "easeOut", delay: 0.25 }}
-              className="w-24 h-px bg-current mx-auto mb-10"
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.7, ease: "easeOut", delay: 0.25 }}
+              className="w-24 h-px bg-current mx-auto mb-8"
             />
 
             <motion.p
               initial={{ opacity: 0, y: 28 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-              transition={{ duration: 0.9, ease: "easeOut", delay: 0.4 }}
-              className="text-[clamp(1.2rem,3.8vw,2.2rem)] font-medium leading-tight max-w-5xl mx-auto text-neutral-800"
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.7, ease: "easeOut", delay: 0.4 }}
+              className="text-[clamp(1.1rem,3.5vw,2rem)] font-medium leading-tight max-w-4xl mx-auto text-neutral-800"
             >
               My goal is to transform your idea into a product where design meets effortless experience.
             </motion.p>
@@ -989,13 +994,13 @@ export default function App() {
             </div>
           </div>
 
-          <div className="text-center mt-16 md:mt-24 mb-16 md:mb-24">
+          <div className="text-center mt-12 md:mt-16 mb-12 md:mb-16">
             <motion.blockquote
               initial={{ opacity: 0, y: 28 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-              transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
-              className="text-[clamp(1.1rem,3vw,2rem)] font-medium leading-relaxed max-w-4xl mx-auto italic text-neutral-800"
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
+              className="text-[clamp(1rem,2.8vw,1.8rem)] font-medium leading-relaxed max-w-4xl mx-auto italic text-neutral-800"
             >
               “Every detail is intentional, every motion is meaningful, every click leads somewhere.”
             </motion.blockquote>
@@ -1003,8 +1008,8 @@ export default function App() {
             <motion.div
               initial={{ opacity: 0, y: 28 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-              transition={{ duration: 0.9, ease: "easeOut", delay: 0.35 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.7, ease: "easeOut", delay: 0.35 }}
               className="mt-6 text-xs font-medium tracking-[0.3em] uppercase opacity-60"
             >
               — NOTE HERE
@@ -1035,6 +1040,8 @@ export default function App() {
           height: 100%;
           min-height: -webkit-fill-available;
           overscroll-behavior: none;
+          margin: 0;
+          -webkit-overflow-scrolling: touch;
         }
         body {
           overscroll-behavior-y: none;
