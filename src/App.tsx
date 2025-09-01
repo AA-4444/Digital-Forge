@@ -306,15 +306,13 @@ const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
             <motion.section
               key={ids[i]}
               id={ids[i]}
-              style={{
-                opacity,
-                y,
-                zIndex: z,
-                willChange: "transform, opacity",
-                backfaceVisibility: "hidden",
-                WebkitBackfaceVisibility: "hidden",
-                transform: "translateZ(0)",
-              }}
+             style={{
+  opacity,
+  y,
+  zIndex: z,
+  willChange: "transform, opacity",
+  contain: "paint",            
+}}
               className="relative min-h-[100svh] flex items-stretch"
             >
               <div className="w-full">{child}</div>
@@ -326,15 +324,13 @@ const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
           <motion.section
             key={ids[i]}
             id={ids[i]}
-            style={{
-              opacity,
-              y,
-              zIndex: z,
-              willChange: "transform, opacity",
-              backfaceVisibility: "hidden",
-              WebkitBackfaceVisibility: "hidden",
-              transform: "translateZ(0)",
-            }}
+           style={{
+  opacity,
+  y,
+  zIndex: z,
+  willChange: "transform, opacity",
+  contain: "paint",
+}}
             className="sticky top-0 h-[100vh] flex items-center"
           >
             <div className="w-full">{child}</div>
@@ -397,6 +393,55 @@ const gradient = (i: number) =>
   }%, rgba(10,60,194,0.2), transparent 60%), linear-gradient(135deg, #ffffff, #f6f7fb)`;
 
 // ---------- Footer ----------
+const CTAButton: React.FC = () => {
+  return (
+    <motion.a
+      href="#contact"
+      onClick={(e) => {
+        e.preventDefault();
+        document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+      }}
+      className="relative inline-block isolate focus:outline-none"
+      initial={false}                 // <— не наследуем initial от родителей (reveal)
+      whileTap={{ scale: 0.98 }}      // тактильный отклик
+      role="button"
+      tabIndex={0}
+      style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
+    >
+      {/* Контейнер */}
+      <div className="relative z-10 px-8 sm:px-10 md:px-12 py-5 sm:py-5 md:py-6 border border-white/80 text-[10px] sm:text-[11px] font-medium tracking-[0.35em] sm:tracking-[0.4em] uppercase overflow-hidden">
+        
+        {/* Текст — без variants, чистый whileHover */}
+        <motion.span
+          className="relative z-20"
+          initial={{ color: "#FFFFFF" }}
+          whileHover={{ color: "#000000" }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+        >
+          Start Project
+        </motion.span>
+
+        {/* Слайдер-оверлей */}
+        <motion.span
+          className="absolute inset-0 z-10 pointer-events-none"
+          style={{ background: "#FFFFFF" }}
+          initial={{ x: "-100%" }}
+          whileHover={{ x: "0%" }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+        />
+      </div>
+
+      {/* Фоновый «пульс» */}
+      <motion.span
+        className="absolute inset-0 -z-10"
+        style={{ background: "#FFFFFF" }}
+        initial={{ scale: 0, opacity: 0 }}
+        whileHover={{ scale: 1, opacity: 0.15 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+      />
+    </motion.a>
+  );
+};
 export const FooterQuad = () => {
   const services = ["Complete Website", "UI/UX Design", "iOS Development", "Web Development"];
 
@@ -410,7 +455,7 @@ export const FooterQuad = () => {
   return (
     <section
       id="contact"
-      className="relative min-h-[100svh] md:min-h-[100vh] flex items-stretch overflow-hidden"
+       className="relative min-h-[100svh] flex items-stretch overflow-hidden"
       style={{ background: "#1E1E1E", color: "#FFF" }}
     >
       {/* Background marquee (offset on mobile, same opacity) */}
@@ -452,23 +497,8 @@ export const FooterQuad = () => {
           </motion.h2>
 
           <motion.div {...reveal(0.22)} className="inline-block mt-1 sm:mt-0">
-            <a
-              href="#contact"
-              onClick={(e) => {
-                e.preventDefault();
-                document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
-              }}
-              className="group relative inline-block isolate"
-            >
-              <div className="relative z-10 px-8 sm:px-10 md:px-12 py-5 sm:py-5 md:py-6 border border-white/80 text-[10px] sm:text-[11px] font-medium tracking-[0.35em] sm:tracking-[0.4em] uppercase overflow-hidden">
-                <span className="relative z-20 transition-colors duration-700 group-hover:text-black">
-                  Start Project
-                </span>
-                <div className="absolute inset-0 z-10 bg-white -translate-x-full group-hover:translate-x-0 transition-transform duration-700" />
-              </div>
-              <div className="absolute inset-0 -z-10 bg-white scale-0 group-hover:scale-100 transition-transform duration-500 origin-center" />
-            </a>
-          </motion.div>
+  <CTAButton />
+</motion.div>
         </div>
 
         {/* Services */}

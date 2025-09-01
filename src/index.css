@@ -6,8 +6,10 @@ body {
 /* === mobile overflow fixes === */
 html, body {
   width: 100%;
-  overflow-x: clip; /* убирает горизонтальный скролл */
+  overflow-x: clip; 
+  background: #1E1E1E;
 }
+
 
 *, *::before, *::after {
   box-sizing: border-box;
