@@ -222,15 +222,10 @@ const Navigation = () => {
 };
 
 /* ---------- Reduced motion (как было) ---------- */
+/* ---------- Reduced motion: всегда ВКЛ анимации ---------- */
 const useRespectReducedMotion = () => {
-  const sysPrefers = useReducedMotion();
-  const [force, setForce] = React.useState(false);
-  React.useEffect(() => {
-    setForce(typeof window !== "undefined" && localStorage.getItem("forceAnimations") === "1");
-  }, []);
-  return sysPrefers && !force;
+  return false; // iOS больше не отключит анимации
 };
-
 /* ---------- Scene Stack (как в рабочем варианте) ---------- */
 const useIsMobile = () => {
   const [m, setM] = React.useState(false);
@@ -249,86 +244,92 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
   children,
 }) => {
   const prefersReduced = useRespectReducedMotion();
-  const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // 1vh в пикселях (без calc и юнитов) — стабильная высота, без швов
+  const [vhPx, setVhPx] = useState<number>(() =>
+    typeof window !== "undefined" ? (window.visualViewport?.height ?? window.innerHeight) : 0
+  );
+  useEffect(() => {
+    const recalc = () => setVhPx(window.visualViewport?.height ?? window.innerHeight);
+    recalc();
+    window.addEventListener("resize", recalc, { passive: true });
+    window.visualViewport?.addEventListener?.("resize", recalc);
+    return () => {
+      window.removeEventListener("resize", recalc);
+      window.visualViewport?.removeEventListener?.("resize", recalc as any);
+    };
+  }, []);
 
   if (prefersReduced) {
     return (
       <div ref={containerRef}>
         {children.map((child, i) => (
-          <section key={ids[i]} id={ids[i]} className="min-h-[100vh] flex items-center">
-            <div className="w-full">{child}</div>
+          <section key={ids[i]} id={ids[i]} style={{ minHeight: vhPx }}>
+            {child}
           </section>
         ))}
       </div>
     );
   }
 
+  // прокрутка контейнера
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start start", "end end"],
   });
 
-  const smooth = useSpring(scrollYProgress, {
-    stiffness: 160,
-    damping: 42,
-    mass: 0.6,
-  });
+  // сглаживаем
+  const p = useSpring(scrollYProgress, { stiffness: 160, damping: 42, mass: 0.6 });
 
   const count = children.length;
-  const totalH = (count - 1) * 100 + 100;
+  const overlayCount = count - 1; // все, кроме последней, — sticky-слои
 
   return (
     <div
       id="stackRoot"
       ref={containerRef}
       className="relative"
-      /* важно: 1svh + 1px — так sticky-слои стыкуются без щелей */
-      style={{ height: `calc(${totalH} * 1svh + 1px)`, background: palette.bg }}
+      style={{
+        height: `${count * vhPx}px`,   // просто N * vhPx
+        background: palette.bg,
+        transform: "none",
+        WebkitTransform: "none",
+        willChange: "auto",
+        overflow: "visible",
+      }}
     >
       {children.map((child, i) => {
-        const start = i / count;
-        const end = (i + 1) / count;
         const isLast = i === count - 1;
 
-        const baseIn = isMobile ? 0.1 : 0.12;
-        const baseOut = isMobile ? 0.1 : 0.12;
-        const heroIn = isMobile ? 0.16 : 0.2;
-        const heroOut = isMobile ? 0.16 : 0.2;
+        // диапазоны для кроссфейда (без сдвигов по Y)
+        const start = i / count;
+        const end = (i + 1) / count;
 
-        const fadeIn = i === 0 ? heroIn : baseIn;
-        const fadeOut = i === 0 ? heroOut : baseOut;
+        // больший запас перекрытия, чтобы не было шва
+        const fade = 0.28;
 
-        const opacity =
-          i === 0
-            ? useTransform(smooth, [start, end - fadeOut, end], [1, 1, 0])
-            : isLast
-            ? useTransform(smooth, [start, Math.min(end, start + fadeIn), 1], [0, 1, 1])
-            : useTransform(smooth, [start, start + fadeIn, end - fadeOut, end], [0, 1, 1, 0]);
-
-        const delta = isMobile ? 6 : 10;
-        const y =
-          i === 0
-            ? useTransform(smooth, [start, end], [0, -delta])
-            : useTransform(smooth, [start, end], [delta, isLast ? 0 : -delta]);
-
-        const z = count - i;
+        const opacity = isLast
+          ? useTransform(p, [start, Math.min(end, start + fade), 1], [0, 1, 1])
+          : i === 0
+          ? useTransform(p, [start, end - fade, end], [1, 1, 0])
+          : useTransform(p, [start, start + fade, end - fade, end], [0, 1, 1, 0]);
 
         if (isLast) {
+          // последняя секция обычная, занимает ровно 1 экран (vhPx)
           return (
             <section
               key={ids[i]}
               id={ids[i]}
-              className="relative min-h-[calc(100svh+1px)] flex items-stretch"
-              style={{ zIndex: z }}
+              className="relative flex items-stretch"
+              style={{ minHeight: vhPx, zIndex: 1 }}
             >
               <motion.div
                 style={{
                   opacity,
-                  y,
-                  willChange: "transform, opacity",
-                  transform: "translateZ(0)",
+                  willChange: "opacity",          // НЕТ transform → нет швов
                   WebkitBackfaceVisibility: "hidden",
+                  backfaceVisibility: "hidden",
                 }}
                 className="w-full"
               >
@@ -338,25 +339,29 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           );
         }
 
+        // sticky-слои поверх друг друга, без translateY
         return (
           <section
             key={ids[i]}
             id={ids[i]}
-            /* -mt-px убирает тонкую белую линию при скролле */
-            className="sticky top-0 h-[100svh] flex items-center -mt-px"
-            style={{ zIndex: z }}
+            className="sticky top-0"
+            style={{
+              height: `${vhPx}px`,
+              zIndex: count - i,
+              WebkitBackfaceVisibility: "hidden",
+              backfaceVisibility: "hidden",
+            }}
           >
             <motion.div
+              className="absolute inset-0"
               style={{
                 opacity,
-                y,
-                willChange: "transform, opacity",
-                transform: "translateZ(0)",
+                willChange: "opacity",
                 WebkitBackfaceVisibility: "hidden",
+                backfaceVisibility: "hidden",
               }}
-              className="w-full h-full flex items-center"
             >
-              <div className="w-full">{child}</div>
+              {child}
             </motion.div>
           </section>
         );
