@@ -222,41 +222,67 @@ const Navigation = () => {
 };
 
 /* ---------- Reduced motion (как было) ---------- */
+/* ---------- Reduced motion ---------- */
+const isIOS = () => {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || navigator.vendor || (window as any).opera || "";
+  return /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && "ontouchend" in document);
+};
+
 const useRespectReducedMotion = () => {
-  const sysPrefers = useReducedMotion();
+  // Если iOS — всегда включаем анимации, даже если в системе Reduce Motion
+  // (иначе Safari рубит всё и кажется, будто "сломалось")
+  const sys = useReducedMotion();
   const [force, setForce] = React.useState(false);
   React.useEffect(() => {
     setForce(typeof window !== "undefined" && localStorage.getItem("forceAnimations") === "1");
   }, []);
-  return sysPrefers && !force;
+  return !isIOS() && (sys && !force); // на iOS вернётся false → анимации включены
 };
 
 /* ---------- Scene Stack (как в рабочем варианте) ---------- */
-const useIsMobile = () => {
-  const [m, setM] = React.useState(false);
-  React.useEffect(() => {
-    const mq = window.matchMedia?.("(max-width: 768px)");
-    const on = () => setM(!!mq?.matches);
-    on();
-    mq?.addEventListener?.("change", on);
-    return () => mq?.removeEventListener?.("change", on);
-  }, []);
-  return m;
-};
 
+
+/* ---------- Scene Stack (px-точность, без швов) ---------- */
 export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
   ids,
   children,
 }) => {
   const prefersReduced = useRespectReducedMotion();
-  const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  // Высота 1vh в пикселях с учётом DPR, чтобы не было 1px швов
+  const measureVh = () => {
+    const raw = (window.visualViewport?.height ?? window.innerHeight);
+    const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+    return Math.round(raw * dpr) / dpr; // привязка к физическим пикселям
+  };
+
+  const [vhPx, setVhPx] = useState<number>(() =>
+    typeof window === "undefined" ? 0 : measureVh()
+  );
+
+  useEffect(() => {
+    const recalc = () => setVhPx(measureVh());
+    recalc();
+    window.addEventListener("resize", recalc, { passive: true });
+    window.addEventListener("orientationchange", recalc, { passive: true });
+    window.visualViewport?.addEventListener?.("resize", recalc);
+    window.addEventListener("pageshow", recalc, { passive: true }); // bfcache
+    return () => {
+      window.removeEventListener("resize", recalc);
+      window.removeEventListener("orientationchange", recalc);
+      window.visualViewport?.removeEventListener?.("resize", recalc as any);
+      window.removeEventListener("pageshow", recalc);
+    };
+  }, []);
+
   if (prefersReduced) {
+    // Без сложной прокрутки — просто экран за экраном, высота по пикселям
     return (
       <div ref={containerRef}>
         {children.map((child, i) => (
-          <section key={ids[i]} id={ids[i]} className="min-h-[100vh] flex items-center">
+          <section key={ids[i]} id={ids[i]} style={{ minHeight: vhPx }} className="stack-section">
             <div className="w-full">{child}</div>
           </section>
         ))}
@@ -269,66 +295,55 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
     offset: ["start start", "end end"],
   });
 
-  const smooth = useSpring(scrollYProgress, {
-    stiffness: 160,
-    damping: 42,
-    mass: 0.6,
-  });
+  const p = useSpring(scrollYProgress, { stiffness: 160, damping: 42, mass: 0.6 });
 
   const count = children.length;
-  const totalH = (count - 1) * 100 + 100;
+  const totalHeight = count * vhPx; // ровно N экранов по px
 
   return (
     <div
       id="stackRoot"
       ref={containerRef}
       className="relative"
-      /* важно: 1svh + 1px — так sticky-слои стыкуются без щелей */
-      style={{ height: `calc(${totalH} * 1svh + 1px)`, background: palette.bg }}
+      style={{
+        height: `${totalHeight}px`,
+        background: palette.bg,
+        transform: "none",
+        WebkitTransform: "none",
+        willChange: "auto",
+        overflow: "visible",
+      }}
     >
       {children.map((child, i) => {
+        const isLast = i === count - 1;
+        // Отрезки прогресса (равные доли)
         const start = i / count;
         const end = (i + 1) / count;
-        const isLast = i === count - 1;
 
-        const baseIn = isMobile ? 0.1 : 0.12;
-        const baseOut = isMobile ? 0.1 : 0.12;
-        const heroIn = isMobile ? 0.16 : 0.2;
-        const heroOut = isMobile ? 0.16 : 0.2;
+        // Запас перекрытия кроссфейда (только opacity, без y)
+        const fade = 0.25;
 
-        const fadeIn = i === 0 ? heroIn : baseIn;
-        const fadeOut = i === 0 ? heroOut : baseOut;
-
-        const opacity =
-          i === 0
-            ? useTransform(smooth, [start, end - fadeOut, end], [1, 1, 0])
-            : isLast
-            ? useTransform(smooth, [start, Math.min(end, start + fadeIn), 1], [0, 1, 1])
-            : useTransform(smooth, [start, start + fadeIn, end - fadeOut, end], [0, 1, 1, 0]);
-
-        const delta = isMobile ? 6 : 10;
-        const y =
-          i === 0
-            ? useTransform(smooth, [start, end], [0, -delta])
-            : useTransform(smooth, [start, end], [delta, isLast ? 0 : -delta]);
-
-        const z = count - i;
+        const opacity = isLast
+          ? useTransform(p, [start, Math.min(end, start + fade), 1], [0, 1, 1])
+          : i === 0
+          ? useTransform(p, [start, end - fade, end], [1, 1, 0])
+          : useTransform(p, [start, start + fade, end - fade, end], [0, 1, 1, 0]);
 
         if (isLast) {
           return (
             <section
               key={ids[i]}
               id={ids[i]}
-              className="relative min-h-[calc(100svh+1px)] flex items-stretch"
-              style={{ zIndex: z }}
+              className="relative stack-section"
+              style={{ minHeight: vhPx, zIndex: 1 }}
             >
               <motion.div
                 style={{
                   opacity,
-                  y,
-                  willChange: "transform, opacity",
-                  transform: "translateZ(0)",
+                  // только opacity → Safari sticky не ломается и швов нет
+                  willChange: "opacity",
                   WebkitBackfaceVisibility: "hidden",
+                  backfaceVisibility: "hidden",
                 }}
                 className="w-full"
               >
@@ -342,21 +357,25 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           <section
             key={ids[i]}
             id={ids[i]}
-            /* -mt-px убирает тонкую белую линию при скролле */
-            className="sticky top-0 h-[100svh] flex items-center -mt-px"
-            style={{ zIndex: z }}
+            className="sticky top-0 stack-section"
+            style={{
+              height: `${vhPx}px`,
+              zIndex: count - i,
+              WebkitBackfaceVisibility: "hidden",
+              backfaceVisibility: "hidden",
+              // ВАЖНО: без translate/scale тут — иначе sticky и линии сломаются
+            }}
           >
             <motion.div
+              className="absolute inset-0"
               style={{
                 opacity,
-                y,
-                willChange: "transform, opacity",
-                transform: "translateZ(0)",
+                willChange: "opacity",
                 WebkitBackfaceVisibility: "hidden",
+                backfaceVisibility: "hidden",
               }}
-              className="w-full h-full flex items-center"
             >
-              <div className="w-full">{child}</div>
+              {child}
             </motion.div>
           </section>
         );
@@ -844,6 +863,15 @@ export default function App() {
           }
         }
       `}</style>
+      <style>{`
+  /* одинаковый фон под sticky-стыками, чтобы не мигала "полоска" */
+  .stack-section { background: ${palette.bg}; }
+
+  /* подстраховка c overscroll, чтобы iOS не "тянул" фон и не рвал слои */
+  html, body { overscroll-behavior-y: none; }
+
+  /* никакого transform на body/html/контейнерах со sticky предками */
+`}</style>
     </div>
   );
 
