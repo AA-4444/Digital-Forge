@@ -87,7 +87,7 @@ const Navigation = () => {
       const rootTop = (window.scrollY || window.pageYOffset) + root.getBoundingClientRect().top;
       const vh = window.visualViewport?.height ?? window.innerHeight;
 
-      let target = Math.round(rootTop + idx * vh) + 2;
+      let target = Math.round(rootTop + idx * vh);
       const max = Math.max(0, document.documentElement.scrollHeight - vh);
       target = Math.min(Math.max(target, 0), max);
 
@@ -96,12 +96,13 @@ const Navigation = () => {
       try {
         history.replaceState(null, "", `#${id}`);
       } catch {}
-    }, 80);
+    }, 60);
   };
 
   return (
     <>
-      <div className="fixed top-6 left-6 z-40">
+      {/* [FIX] слегка отодвинул кнопку от контента на мобилке, чтобы визуально не «налезала» на карточку заголовка */}
+      <div className="fixed z-[60]" style={{ top: "max(1rem, env(safe-area-inset-top))", left: "1.5rem" }}>
         <button
           ref={btnRef}
           onPointerUp={toggle}
@@ -128,12 +129,10 @@ const Navigation = () => {
             id="nav-panel"
             role="dialog"
             aria-modal="true"
-            className="fixed z-50"
+            className="fixed z-[70]"
             style={{
-              top: 24,
-              left: 24,
-              WebkitBackfaceVisibility: "hidden",
-              backfaceVisibility: "hidden",
+              top: "max(1.5rem, calc(env(safe-area-inset-top) + 0.5rem))",
+              left: "1.5rem",
               WebkitTapHighlightColor: "transparent",
             }}
             initial={{ width: 56, height: 48, borderRadius: 9999, opacity: 0.98 }}
@@ -145,10 +144,7 @@ const Navigation = () => {
               className="relative shadow-xl rounded-3xl overflow-hidden h-full w-full"
               style={{ background: palette.blue, color: "#fff" }}
             >
-              <div
-                className="px-5 py-4"
-                style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
-              >
+              <div className="px-5 py-4" style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
                 <div className="flex justify-between items-center">
                   <span className="uppercase text-[11px] tracking-[0.4em] leading-none">close</span>
                   <button
@@ -218,18 +214,15 @@ const Navigation = () => {
 
 /* ---------- Helpers for iOS ---------- */
 const isIOS = () => {
-  // iOS/iPadOS Safari detection incl. iPad on Mac chip
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent || navigator.vendor || (window as any).opera || "";
   const iOS =
     /iPad|iPhone|iPod/.test(ua) ||
-    // iPadOS 13+ identifies as Mac but has touch
     (ua.includes("Mac") && "ontouchend" in document);
   return iOS;
 };
 
 const setVHUnit = () => {
-  // 1% viewport height in px -> CSS var --vh
   const vh = window.visualViewport?.height ?? window.innerHeight;
   document.documentElement.style.setProperty("--vh", `${vh * 0.01}px`);
 };
@@ -242,11 +235,9 @@ const useRespectReducedMotion = () => {
 
   React.useEffect(() => {
     setForceOn(localStorage.getItem("forceAnimations") === "1");
-    // allow explicit opt-in to respect reduced motion (rare)
     setRespect(localStorage.getItem("respectReducedMotion") === "1");
   }, []);
 
-  // На iOS мы по умолчанию НЕ отключаем анимации (там часто включён Reduce Motion у пользователя)
   if (isIOS() && !respect) return false;
   return sysPrefers && !forceOn;
 };
@@ -272,7 +263,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
   const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // обновляем корректный vh для iOS / мобильных браузеров
+  // [FIX] корректный vh + фиксация resize/zoom
   useEffect(() => {
     setVHUnit();
     const onRes = () => setVHUnit();
@@ -288,7 +279,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
     return (
       <div ref={containerRef}>
         {children.map((child, i) => (
-          <section key={ids[i]} id={ids[i]} className="min-h-[100vh] flex items-center">
+          <section key={ids[i]} id={ids[i]} className="min-h-[100vh] flex items-center" style={{ background: palette.bg }}>
             <div className="w-full">{child}</div>
           </section>
         ))}
@@ -315,15 +306,15 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
       id="stackRoot"
       ref={containerRef}
       className="relative"
-      // вместо svh используем кастомный --vh с фолбэком
+      // [FIX] убрал +1px и -mt-px; уравнял фон секций — пропадает «полоска»
       style={{
-        height: `calc(${totalH} * var(--vh, 1dvh) + 1px)`,
+        height: `calc(${totalH} * var(--vh, 1vh))`,
         background: palette.bg,
-        // важно: не использовать transform на контейнере — иначе сломается sticky в Safari
-        willChange: "auto",
-        WebkitTransform: "none",
         transform: "none",
+        WebkitTransform: "none",
         overflow: "visible",
+        // [FIX] изоляция слоёв, чтобы fixed-элементы поверх не мерцали/не пропадали
+        isolation: "isolate",
       }}
     >
       {children.map((child, i) => {
@@ -354,16 +345,16 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
 
         const z = count - i;
 
-        // NB: sticky должен быть на секции без transform
         if (isLast) {
           return (
             <section
               key={ids[i]}
               id={ids[i]}
-              className="relative min-h-[calc(100dvh+1px)] flex items-stretch"
+              className="relative flex items-stretch"
               style={{
+                minHeight: "100dvh",
                 zIndex: z,
-                contain: "layout style paint", // немного помогает Safari при слоении
+                background: palette.bg, // [FIX] тот же фон, чтобы не было просветов
               }}
             >
               <motion.div
@@ -386,12 +377,12 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
           <section
             key={ids[i]}
             id={ids[i]}
-            className="sticky top-0 h-[100dvh] flex items-center -mt-px"
+            className="sticky top-0 h-[100dvh] flex items-center"
             style={{
               zIndex: z,
+              background: palette.bg, // [FIX] одинаковый фон
               backfaceVisibility: "hidden",
               WebkitBackfaceVisibility: "hidden",
-              // Ниже — важно: никаких transform на секции
             }}
           >
             <motion.div
@@ -555,7 +546,7 @@ export const FooterQuad = () => {
       </div>
 
       {/* Content */}
-      <div className="relative max-w-[1400px] mx-auto w-full px-4 sm:px-6 md:px-10 sm:py-14 md:py-16 flex flex-col justify-between mt-[10vh] sm:mt-0 py-8">
+      <div className="relative max-w={[1400] + 'px'} mx-auto w-full px-4 sm:px-6 md:px-10 sm:py-14 md:py-16 flex flex-col justify-between mt-[10vh] sm:mt-0 py-8">
         <div className="text-center mb-8 sm:mb-14 md:mb-16">
           <motion.h2
             {...reveal(0.1)}
@@ -677,10 +668,15 @@ const AwardsButton: React.FC = () => {
   ];
 
   return (
+    // [FIX] поднял z-index и изолировал слой, чтобы фикс-кнопка не «терялась»
     <div
       ref={rootRef}
-      className="fixed right-4 sm:right-6 z-40"
-      style={{ bottom: `calc(1.25rem + env(safe-area-inset-bottom))` }}
+      className="fixed z-[65]"
+      style={{
+        right: "1.5rem",
+        bottom: "calc(1.25rem + env(safe-area-inset-bottom))",
+        isolation: "isolate",
+      }}
     >
       <button
         type="button"
@@ -773,10 +769,10 @@ const AwardsButton: React.FC = () => {
 /* ---------- App ---------- */
 export default function App() {
   useEffect(() => {
-    // системный smooth (оставим, не мешает)
+    // системный smooth
     document.documentElement.style.scrollBehavior = "smooth";
 
-    // инициализация корректного --vh
+    // корректный --vh
     setVHUnit();
     const onRes = () => setVHUnit();
     window.addEventListener("resize", onRes, { passive: true });
@@ -1092,6 +1088,8 @@ export default function App() {
         html, body, #root { background: ${palette.bg}; height: 100%; }
         body { overscroll-behavior-y: none; }
         * { -webkit-tap-highlight-color: transparent; }
+        /* [FIX] отключаем нежелательные стек-контексты у всего документа */
+        html, body { transform: none !important; }
       `}</style>
     </div>
   );
