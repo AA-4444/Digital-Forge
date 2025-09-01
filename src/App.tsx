@@ -889,125 +889,136 @@ export default function App() {
   );
 
   const WhatWeDo = (
-    <section id="about" className="relative overflow-x-hidden" style={{ color: palette.ink }}>
-      <div className="absolute inset-0 pointer-events-none select-none opacity-5">
-        <div className="absolute top-1/2 left-0 w-full -translate-y-1/2">
-          <div
-            className="flex space-x-16"
-            style={{ animation: "scroll-horizontal 100s linear infinite", width: "calc(300% + 128px)" }}
+  <section
+    id="about"
+    className="relative"
+    style={{
+      color: palette.ink,
+      background: palette.bg,
+      minHeight: "calc(100dvh + env(safe-area-inset-top) + env(safe-area-inset-bottom))",
+      paddingTop: "calc(env(safe-area-inset-top) + 20px)",
+      contain: "content",
+      overflow: "visible",
+    }}
+  >
+    <div className="absolute inset-0 pointer-events-none select-none opacity-5">
+      <div className="absolute top-[60%] left-0 w-full -translate-y-1/2">
+        <div
+          className="flex space-x-16"
+          style={{ animation: "scroll-horizontal 100s linear infinite", width: "calc(300% + 128px)" }}
+        >
+          {Array(3)
+            .fill("CREATIVE DIGITAL EXPERIENCES")
+            .map((text, index) => (
+              <span key={index} className="text-[clamp(3rem,12vw,12rem)] font-black whitespace-nowrap">
+                {text}
+              </span>
+            ))}
+        </div>
+      </div>
+    </div>
+
+    <div className="relative px-4 md:px-8 w-full">
+      <div className="max-w-[1600px] mx-auto">
+        <div className="text-center pt-20 md:pt-28 mb-20 md:mb-24">
+          <motion.h2
+            initial={{ opacity: 0, y: 28 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.4, margin: "0px 0px -20% 0px" }}
+            transition={{ duration: 0.9, ease: "easeOut", delay: 0.05 }}
+            className="text-[clamp(1.8rem,7vw,7rem)] font-black leading-[0.8] mb-10"
           >
-            {Array(3)
-              .fill("CREATIVE DIGITAL EXPERIENCES")
-              .map((text, index) => (
-                <span key={index} className="text-[clamp(4rem,15vw,15rem)] font-black whitespace-nowrap">
-                  {text}
-                </span>
-              ))}
+            What I do
+          </motion.h2>
+
+          <motion.div
+            initial={{ opacity: 0, y: 28 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.4, margin: "0px 0px -20% 0px" }}
+            transition={{ duration: 0.9, ease: "easeOut", delay: 0.15 }}
+            className="w-24 h-px bg-current mx-auto mb-10"
+          />
+
+          <motion.p
+            initial={{ opacity: 0, y: 28 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.4, margin: "0px 0px -20% 0px" }}
+            transition={{ duration: 0.9, ease: "easeOut", delay: 0.3 }}
+            className="text-[clamp(1rem,3.5vw,2rem)] font-medium leading-tight max-w-5xl mx-auto text-neutral-800"
+          >
+            My goal is to transform your idea into a product where design meets effortless experience.
+          </motion.p>
+        </div>
+
+        <div className="grid grid-cols-12 gap-4 items-stretch">
+          <div className="col-span-12 lg:col-span-4">
+            <Tile className="p-8 md:p-12 h-full flex flex-col justify-between">
+              <div>
+                <p className="uppercase tracking-[0.2em] text-xs text-neutral-500">What We Do</p>
+                <h3 className="text-4xl md:text-5xl mt-3 font-medium">We make brands move.</h3>
+              </div>
+              <p className="text-neutral-600 mt-6 leading-relaxed max-w-prose">
+                Strategy → Visual identity → Web experiences. We combine design and engineering to ship fast, award-ready sites with measurable impact.
+              </p>
+            </Tile>
+          </div>
+
+          <div className="col-span-12 lg:col-span-8 grid grid-cols-2 gap-4">
+            {[
+              { h: "Design Systems", p: "Scalable UI kits and typography tuned for performance and craft." },
+              { h: "Motion & Interactions", p: "Framer-Motion driven microinteractions, scroll scenes, and reveals." },
+              { h: "Webflow / React", p: "Marketing sites or headless builds—SEO-ready, CMS-driven." },
+              { h: "Perf & Accessibility", p: "Ship light, score high. Built to be beautiful and usable for all." },
+            ].map((card, i) => (
+              <motion.div
+                key={card.h}
+                initial={{ y: 10, opacity: 0 }}
+                whileInView={{ y: 0, opacity: 1 }}
+                viewport={{ once: false, amount: 0.5 }}
+                transition={{ delay: i * 0.05 }}
+                className="rounded-3xl border border-black/5 bg-white p-6 md:p-8"
+              >
+                <h4 className="text-xl md:text-2xl font-medium mb-2" style={{ color: palette.ink }}>
+                  {card.h}
+                </h4>
+                <p className="text-sm md:text-base text-neutral-600 leading-relaxed">{card.p}</p>
+              </motion.div>
+            ))}
           </div>
         </div>
-      </div>
 
-      <div className="relative px-4 md:px-8 w-full">
-        <div className="max-w-[1600px] mx-auto">
-          <div className="text-center pt-16 md:pt-24 mb-16 md:mb-20">
-            <motion.h2
-              initial={{ opacity: 0, y: 28 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-              transition={{ duration: 0.9, ease: "easeOut", delay: 0.1 }}
-              className="text-[clamp(2rem,8vw,8rem)] font-black leading-[0.8] mb-10"
-            >
-              What I do
-            </motion.h2>
+        <div className="text-center mt-16 md:mt-24 mb-16 md:mb-24">
+          <motion.blockquote
+            initial={{ opacity: 0, y: 28 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.4, margin: "0px 0px -20% 0px" }}
+            transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
+            className="text-[clamp(1rem,3vw,2rem)] font-medium leading-relaxed max-w-4xl mx-auto italic text-neutral-800"
+          >
+            “Every detail is intentional, every motion is meaningful, every click leads somewhere.”
+          </motion.blockquote>
 
-            <motion.div
-              initial={{ opacity: 0, y: 28 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-              transition={{ duration: 0.9, ease: "easeOut", delay: 0.25 }}
-              className="w-24 h-px bg-current mx-auto mb-10"
-            />
-
-            <motion.p
-              initial={{ opacity: 0, y: 28 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-              transition={{ duration: 0.9, ease: "easeOut", delay: 0.4 }}
-              className="text-[clamp(1.2rem,3.8vw,2.2rem)] font-medium leading-tight max-w-5xl mx-auto text-neutral-800"
-            >
-              My goal is to transform your idea into a product where design meets effortless experience.
-            </motion.p>
-          </div>
-
-          <div className="grid grid-cols-12 gap-4 items-stretch">
-            <div className="col-span-12 lg:col-span-4">
-              <Tile className="p-8 md:p-12 h-full flex flex-col justify-between">
-                <div>
-                  <p className="uppercase tracking-[0.2em] text-xs text-neutral-500">What We Do</p>
-                  <h3 className="text-4xl md:text-5xl mt-3 font-medium">We make brands move.</h3>
-                </div>
-                <p className="text-neutral-600 mt-6 leading-relaxed max-w-prose">
-                  Strategy → Visual identity → Web experiences. We combine design and engineering to ship fast, award-ready sites with measurable impact.
-                </p>
-              </Tile>
-            </div>
-
-            <div className="col-span-12 lg:col-span-8 grid grid-cols-2 gap-4">
-              {[
-                { h: "Design Systems", p: "Scalable UI kits and typography tuned for performance and craft." },
-                { h: "Motion & Interactions", p: "Framer-Motion driven microinteractions, scroll scenes, and reveals." },
-                { h: "Webflow / React", p: "Marketing sites or headless builds—SEO-ready, CMS-driven." },
-                { h: "Perf & Accessibility", p: "Ship light, score high. Built to be beautiful and usable for all." },
-              ].map((card, i) => (
-                <motion.div
-                  key={card.h}
-                  initial={{ y: 10, opacity: 0 }}
-                  whileInView={{ y: 0, opacity: 1 }}
-                  viewport={{ once: false, amount: 0.5 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="rounded-3xl border border-black/5 bg-white p-6 md:p-8"
-                >
-                  <h4 className="text-xl md:text-2xl font-medium mb-2" style={{ color: palette.ink }}>
-                    {card.h}
-                  </h4>
-                  <p className="text-sm md:text-base text-neutral-600 leading-relaxed">{card.p}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-
-          <div className="text-center mt-16 md:mt-24 mb-16 md:mb-24">
-            <motion.blockquote
-              initial={{ opacity: 0, y: 28 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-              transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
-              className="text-[clamp(1.1rem,3vw,2rem)] font-medium leading-relaxed max-w-4xl mx-auto italic text-neutral-800"
-            >
-              “Every detail is intentional, every motion is meaningful, every click leads somewhere.”
-            </motion.blockquote>
-
-            <motion.div
-              initial={{ opacity: 0, y: 28 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.25, margin: "0px 0px -10% 0px" }}
-              transition={{ duration: 0.9, ease: "easeOut", delay: 0.35 }}
-              className="mt-6 text-xs font-medium tracking-[0.3em] uppercase opacity-60"
-            >
-              — NOTE HERE
-            </motion.div>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 28 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.4, margin: "0px 0px -20% 0px" }}
+            transition={{ duration: 0.9, ease: "easeOut", delay: 0.35 }}
+            className="mt-6 text-xs font-medium tracking-[0.3em] uppercase opacity-60"
+          >
+            — NOTE HERE
+          </motion.div>
         </div>
       </div>
+    </div>
 
-      <style>{`
-        @keyframes scroll-horizontal {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-33.333%); }
-        }
-      `}</style>
-    </section>
-  );
+    <style>{`
+      @keyframes scroll-horizontal {
+        0% { transform: translateX(0); }
+        100% { transform: translateX(-33.333%); }
+      }
+    `}</style>
+  </section>
+);
 
   return (
     <div style={{ background: palette.bg, color: palette.ink }} className="relative min-h-[100dvh]">
