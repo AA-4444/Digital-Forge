@@ -5,7 +5,7 @@ import {
   useScroll,
   useTransform,
   useSpring,
-  useReducedMotion,
+  
 } from "framer-motion";
 import { createPortal } from "react-dom";
 import { ArrowUpRight, Menu, X } from "lucide-react";
@@ -227,17 +227,7 @@ const useRespectReducedMotion = () => {
   return false; // iOS больше не отключит анимации
 };
 /* ---------- Scene Stack (как в рабочем варианте) ---------- */
-const useIsMobile = () => {
-  const [m, setM] = React.useState(false);
-  React.useEffect(() => {
-    const mq = window.matchMedia?.("(max-width: 768px)");
-    const on = () => setM(!!mq?.matches);
-    on();
-    mq?.addEventListener?.("change", on);
-    return () => mq?.removeEventListener?.("change", on);
-  }, []);
-  return m;
-};
+
 
 export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }> = ({
   ids,
@@ -283,7 +273,7 @@ export const SceneStack: React.FC<{ ids: string[]; children: React.ReactNode[] }
   const p = useSpring(scrollYProgress, { stiffness: 160, damping: 42, mass: 0.6 });
 
   const count = children.length;
-  const overlayCount = count - 1; // все, кроме последней, — sticky-слои
+  
 
   return (
     <div
