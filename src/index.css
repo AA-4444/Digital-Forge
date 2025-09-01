@@ -1,23 +1,40 @@
-/* globals.css */
-html, body, #root {
-  background: #E8E4E2 !important;
-  height: 100%;
-  min-height: -webkit-fill-available;
-  overscroll-behavior: none;
-  margin: 0;
-}
-
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overscroll-behavior-y: none;
+}
+/* === mobile overflow fixes === */
+html, body {
+  width: 100%;
+  overflow-x: clip; 
+  background: #E8E4E2 !important;
+}
+/* globals.css */
+html, body, #root { height: 100%; background: #E8E4E2 !important; }
+body { overscroll-behavior-y: none; }
+body::before {
+  content: "";
+  position: fixed;
+  background: #E8E4E2 !important;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+* { -webkit-tap-highlight-color: transparent; }
+html, body, #root {
+  background: #E8E4E2 !important;
+  min-height: 100%;
+}
+html {
+  /* iOS высота без «скачков» */
+  height: -webkit-fill-available;
+}
+body {
+  min-height: -webkit-fill-available;
+  margin: 0;
 }
 
-*,
-*::before,
-*::after {
+*, *::before, *::after {
   box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
 }
 
 img, video, canvas, svg {
@@ -25,7 +42,7 @@ img, video, canvas, svg {
   height: auto;
 }
 
-/* Tailwind layers */
+/* --- Tailwind layers --- */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
